@@ -1,6 +1,5 @@
 local ATS = AutoTrinketSwitcherFrame
 
--- Create options panel
 function ATS:CreateOptions()
     local panel = CreateFrame("Frame")
     panel.name = "AutoTrinketSwitcher"
@@ -46,14 +45,14 @@ function ATS:CreateOptions()
     end
 
     -- General settings box
-    local generalBox, last = CreateBox("General settings", title)
-    last = CreateCheck(generalBox, "Show menu only when out of combat", "menuOnlyOutOfCombat", last)
-    last = CreateCheck(generalBox, "Show cooldown numbers", "showCooldownNumbers", last)
-    last = CreateCheck(generalBox, "Use large cooldown numbers", "largeNumbers", last)
-    last = CreateCheck(generalBox, "Lock windows", "lockWindows", last)
+    local generalBox, gLast = CreateBox("General settings", title)
+    gLast = CreateCheck(generalBox, "Show menu only when out of combat", "menuOnlyOutOfCombat", gLast)
+    gLast = CreateCheck(generalBox, "Show cooldown numbers", "showCooldownNumbers", gLast)
+    gLast = CreateCheck(generalBox, "Use large cooldown numbers", "largeNumbers", gLast)
+    gLast = CreateCheck(generalBox, "Lock windows", "lockWindows", gLast)
 
     local tooltipLabel = generalBox:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    tooltipLabel:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -16)
+    tooltipLabel:SetPoint("TOPLEFT", gLast, "BOTTOMLEFT", 0, -16)
     tooltipLabel:SetText("Tooltips")
 
     local tooltipDrop = CreateFrame("Frame", "ATSTooltipDropdown", generalBox, "UIDropDownMenuTemplate")
@@ -74,8 +73,7 @@ function ATS:CreateOptions()
     end)
     UIDropDownMenu_SetSelectedValue(tooltipDrop, db.tooltipMode)
 
-    last = CreateCheck(generalBox, "Use tiny tooltips", "tinyTooltips", tooltipDrop)
-    generalBox:SetPoint("BOTTOM", last, "BOTTOM", 0, -16)
+    gLast = CreateCheck(generalBox, "Use tiny tooltips", "tinyTooltips", tooltipDrop)
 
     -- Menu settings box
     local menuBox, mHeader = CreateBox("Menu settings", generalBox, -16)
@@ -122,7 +120,6 @@ function ATS:CreateOptions()
             ATS:ShowMenu(ATS.menu.anchor)
         end
     end)
-    menuBox:SetPoint("BOTTOM", wrapSlider, "BOTTOM", 0, -40)
 
     -- Colour settings box
     local colorBox, cHeader = CreateBox("Colour settings", menuBox, -16)
@@ -173,9 +170,13 @@ function ATS:CreateOptions()
     cLast = CreateColorOption(colorBox, "Slot 14", "slot14", cLast)
     cLast = CreateColorOption(colorBox, "Pending swap", "glow", cLast)
 
-    colorBox:SetPoint("BOTTOM", cLast, "BOTTOM", 0, -16)
+    -- Size boxes when shown to avoid anchoring parents to children
+    panel:SetScript("OnShow", function()
+        generalBox:SetHeight(generalBox:GetTop() - gLast:GetBottom() + 16)
+        menuBox:SetHeight(menuBox:GetTop() - wrapSlider:GetBottom() + 40)
+        colorBox:SetHeight(colorBox:GetTop() - cLast:GetBottom() + 16)
+    end)
 
-    -- Register the options panel depending on the API available
     if Settings and Settings.RegisterAddOnCategory then
         local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
         category.ID = panel.name

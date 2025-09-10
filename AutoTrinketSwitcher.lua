@@ -81,9 +81,10 @@ function ATS:ApplyColorSettings()
 end
 
 function ATS:UpdateCooldownFont()
-    local font = AutoTrinketSwitcherCharDB.largeNumbers and "NumberFontNormalLarge" or "NumberFontNormal"
+    local obj = AutoTrinketSwitcherCharDB.largeNumbers and NumberFontNormalLarge or NumberFontNormal
+    local font, size = obj:GetFont()
     for _, button in pairs(self.buttons or {}) do
-        button.cdText:SetFontObject(font)
+        button.cdText:SetFont(font, size, "OUTLINE")
     end
 end
 
@@ -204,9 +205,9 @@ function ATS:UpdateButtons()
         local itemID = GetInventoryItemID("player", slot)
         local texture = GetInventoryItemTexture("player", slot)
         if texture then
-            button.icon:SetTexture(texture)
+            button.icon.SetTexture(button.icon, texture)
         else
-            button.icon:SetTexture(134400) -- default icon
+            button.icon.SetTexture(button.icon, 134400) -- default icon
         end
         if PendingSwap(slot) then
             local c = AutoTrinketSwitcherCharDB.colors.glow
@@ -282,8 +283,8 @@ function ATS:ShowMenu(anchor)
     wipe(self.menu.icons)
 
     local trinkets = ScanTrinkets()
-    local wrap = math.min(30, math.max(1, AutoTrinketSwitcherDB.wrapAt))
-    local dir = AutoTrinketSwitcherDB.menuPosition
+    local wrap = math.min(30, math.max(1, AutoTrinketSwitcherCharDB.wrapAt))
+    local dir = AutoTrinketSwitcherCharDB.menuPosition
     local isVertical = dir == "LEFT" or dir == "RIGHT"
     local size, spacing = 32, 4
     local cols, rows = 0, 0
@@ -326,11 +327,10 @@ function ATS:ShowMenu(anchor)
                 ATS:ShowItemTooltip(self, self.itemID)
             end
         end)
-        
+
         btn:SetScript("OnEnter", function(self)
-            if AutoTrinketSwitcherDB.showTooltips then
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetItemByID(self.itemID)
+            if AutoTrinketSwitcherCharDB.tooltipMode == "HOVER" then
+                ATS:ShowItemTooltip(self, self.itemID)
             end
         end)
         btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -391,7 +391,7 @@ function ATS:CreateButtons()
     frame:SetSize(84, 44)
     local pos = AutoTrinketSwitcherCharDB.buttonPos or {}
     frame:SetPoint(pos.point or "CENTER", UIParent, pos.relativePoint or "CENTER", pos.x or 0, pos.y or 0)
-    frame:EnableMouse(not AutoTrinketSwitcherDB.lockWindows)
+    frame:EnableMouse(not AutoTrinketSwitcherCharDB.lockWindows)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
@@ -425,10 +425,9 @@ function ATS:CreateButtons()
         btn:SetSize(36, 36)
         btn:SetPoint("LEFT", 4 + (index - 1) * 40, 0)
 
-        -- Only react to left clicks and let the secure handler execute the macro
         btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         btn:SetAttribute("type1", "macro")
-        btn:SetAttribute("macrotext", "/use " .. slot)
+        btn.SetAttribute(btn, "macrotext", "/use " .. slot)
 
         btn.icon = btn:CreateTexture(nil, "BACKGROUND")
         btn.icon:SetAllPoints(true)
@@ -452,11 +451,16 @@ function ATS:CreateButtons()
         btn.glow:Hide()
 
         btn.slot = slot
+        btn:SetScript("OnClick", function(self, mouse)
+            if mouse == "RightButton" and AutoTrinketSwitcherCharDB.tooltipMode == "RIGHTCLICK" then
+                ATS:ShowTooltip(self, slot)
+            end
+        end)
+
         btn:SetScript("OnEnter", function(self)
             ATS:ShowMenu(btn)
-            if AutoTrinketSwitcherDB.showTooltips then
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetInventoryItem("player", slot)
+            if AutoTrinketSwitcherCharDB.tooltipMode == "HOVER" then
+                ATS:ShowTooltip(self, slot)
             end
         end)
         btn:SetScript("OnLeave", function()
