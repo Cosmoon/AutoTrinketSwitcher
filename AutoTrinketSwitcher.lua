@@ -2,19 +2,30 @@ local ATS = CreateFrame("Frame", "AutoTrinketSwitcherFrame")
 
 -- Ensure saved variables exist after they are loaded
 local function EnsureDB()
-    AutoTrinketSwitcherDB = AutoTrinketSwitcherDB or {}
-    AutoTrinketSwitcherDB.queues = AutoTrinketSwitcherDB.queues or { [13] = {}, [14] = {} }
-    AutoTrinketSwitcherDB.menuOnlyOutOfCombat = AutoTrinketSwitcherDB.menuOnlyOutOfCombat ~= false
-    AutoTrinketSwitcherDB.showCooldowns = AutoTrinketSwitcherDB.showCooldowns ~= false
+    AutoTrinketSwitcherCharDB = AutoTrinketSwitcherCharDB or {}
+    local db = AutoTrinketSwitcherCharDB
 
-    AutoTrinketSwitcherDB.colors = AutoTrinketSwitcherDB.colors or {}
-    AutoTrinketSwitcherDB.colors.slot13 = AutoTrinketSwitcherDB.colors.slot13 or { r = 0, g = 1, b = 0 }
-    AutoTrinketSwitcherDB.colors.slot14 = AutoTrinketSwitcherDB.colors.slot14 or { r = 1, g = 0.82, b = 0 }
-    AutoTrinketSwitcherDB.colors.glow   = AutoTrinketSwitcherDB.colors.glow   or { r = 1, g = 1, b = 0 }
+    db.queues = db.queues or { [13] = {}, [14] = {} }
+    db.menuOnlyOutOfCombat = db.menuOnlyOutOfCombat ~= false
 
-    AutoTrinketSwitcherCharDB = AutoTrinketSwitcherCharDB or {
-        buttonPos = { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 },
-    }
+    if db.showCooldowns ~= nil and db.showCooldownNumbers == nil then
+        db.showCooldownNumbers = db.showCooldowns
+        db.showCooldowns = nil
+    end
+    db.showCooldownNumbers = db.showCooldownNumbers ~= false
+    db.largeNumbers = db.largeNumbers or false
+    db.lockWindows = db.lockWindows or false
+    db.tooltipMode = db.tooltipMode or "HOVER"
+    db.tinyTooltips = db.tinyTooltips or false
+    db.menuPosition = db.menuPosition or "BOTTOM"
+    db.wrapAt = db.wrapAt or 10
+
+    db.colors = db.colors or {}
+    db.colors.slot13 = db.colors.slot13 or { r = 0, g = 1, b = 0 }
+    db.colors.slot14 = db.colors.slot14 or { r = 1, g = 0.82, b = 0 }
+    db.colors.glow   = db.colors.glow   or { r = 1, g = 1, b = 0 }
+
+    db.buttonPos = db.buttonPos or { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 }
 end
 
 -- Utility: get remaining cooldown for an itemID
@@ -31,7 +42,7 @@ end
 
 -- Return queue position of an item for a slot or nil
 function ATS:GetQueuePosition(slot, itemID)
-    for i, id in ipairs(AutoTrinketSwitcherDB.queues[slot]) do
+    for i, id in ipairs(AutoTrinketSwitcherCharDB.queues[slot]) do
         if id == itemID then
             return i
         end
@@ -40,7 +51,7 @@ end
 
 -- Add or remove a trinket from a slot queue
 function ATS:ToggleTrinket(slot, itemID)
-    local queue = AutoTrinketSwitcherDB.queues[slot]
+    local queue = AutoTrinketSwitcherCharDB.queues[slot]
     for i, id in ipairs(queue) do
         if id == itemID then
             table.remove(queue, i)
@@ -53,19 +64,66 @@ end
 -- Apply configured colors to active UI elements
 function ATS:ApplyColorSettings()
     if self.menu and self.menu.icons then
-        local c13 = AutoTrinketSwitcherDB.colors.slot13
-        local c14 = AutoTrinketSwitcherDB.colors.slot14
+        local c13 = AutoTrinketSwitcherCharDB.colors.slot13
+        local c14 = AutoTrinketSwitcherCharDB.colors.slot14
         for _, btn in ipairs(self.menu.icons) do
             btn.pos13:SetTextColor(c13.r, c13.g, c13.b)
             btn.pos14:SetTextColor(c14.r, c14.g, c14.b)
         end
     end
 
-    local glowColor = AutoTrinketSwitcherDB.colors.glow
+    local glowColor = AutoTrinketSwitcherCharDB.colors.glow
     for _, button in pairs(self.buttons or {}) do
         if button.glow then
             button.glow:SetVertexColor(glowColor.r, glowColor.g, glowColor.b, 1)
         end
+    end
+end
+
+function ATS:UpdateCooldownFont()
+    local font = AutoTrinketSwitcherCharDB.largeNumbers and "NumberFontNormalLarge" or "NumberFontNormal"
+    for _, button in pairs(self.buttons or {}) do
+        button.cdText:SetFontObject(font)
+    end
+end
+
+function ATS:UpdateLockState()
+    if self.buttonFrame then
+        local locked = AutoTrinketSwitcherCharDB.lockWindows
+        self.buttonFrame:EnableMouse(not locked)
+        self.buttonFrame:SetMovable(not locked)
+    end
+end
+
+-- Display tooltip for an equipped slot
+function ATS:ShowTooltip(frame, slot)
+    if AutoTrinketSwitcherCharDB.tinyTooltips then
+        local itemID = GetInventoryItemID("player", slot)
+        if not itemID then return end
+        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        local name = GetItemInfo(itemID)
+        if name then GameTooltip:SetText(name) end
+        local _, desc = GetItemSpell(itemID)
+        if desc then GameTooltip:AddLine(desc, 1, 1, 1) end
+        GameTooltip:Show()
+    else
+        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        GameTooltip:SetInventoryItem("player", slot)
+    end
+end
+
+-- Display tooltip for an itemID (used in the menu)
+function ATS:ShowItemTooltip(frame, itemID)
+    if AutoTrinketSwitcherCharDB.tinyTooltips then
+        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        local name = GetItemInfo(itemID)
+        if name then GameTooltip:SetText(name) end
+        local _, desc = GetItemSpell(itemID)
+        if desc then GameTooltip:AddLine(desc, 1, 1, 1) end
+        GameTooltip:Show()
+    else
+        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        GameTooltip:SetItemByID(itemID)
     end
 end
 
@@ -97,7 +155,7 @@ local function CheckSlot(slot)
     -- Only swap if the currently equipped trinket has more than 60s cooldown
     if equippedCD <= 60 then return end
 
-    for _, itemID in ipairs(AutoTrinketSwitcherDB.queues[slot]) do
+    for _, itemID in ipairs(AutoTrinketSwitcherCharDB.queues[slot]) do
         if itemID ~= equippedID then
             local cd = GetItemRemaining(itemID)
             -- Trinket is ready to be swapped in if it has 30s or less cooldown remaining
@@ -119,7 +177,7 @@ local function PendingSwap(slot)
     local equippedCD = GetItemRemaining(equippedID)
     if equippedCD <= 60 then return false end
 
-    for _, itemID in ipairs(AutoTrinketSwitcherDB.queues[slot]) do
+    for _, itemID in ipairs(AutoTrinketSwitcherCharDB.queues[slot]) do
         if itemID ~= equippedID then
             local cd = GetItemRemaining(itemID)
             if cd <= 30 then
@@ -151,7 +209,7 @@ function ATS:UpdateButtons()
             button.icon:SetTexture(134400) -- default icon
         end
         if PendingSwap(slot) then
-            local c = AutoTrinketSwitcherDB.colors.glow
+            local c = AutoTrinketSwitcherCharDB.colors.glow
             button.glow:SetVertexColor(c.r, c.g, c.b, 1)
             button.glow:Show()
         else
@@ -159,15 +217,23 @@ function ATS:UpdateButtons()
         end
 
         -- Handle cooldown overlay and text
-        if AutoTrinketSwitcherDB.showCooldowns and itemID then
+        if itemID then
             local start, duration = GetItemCooldown(itemID)
             if start and duration and start > 0 and duration > 0 then
                 button.cooldown:SetCooldown(start, duration)
                 button.cooldown:Show()
-                local remaining = start + duration - GetTime()
-                if remaining > 0 then
-                    button.cdText:SetText(math.ceil(remaining))
-                    button.cdText:Show()
+                if AutoTrinketSwitcherCharDB.showCooldownNumbers then
+                    local remaining = start + duration - GetTime()
+                    if remaining > 0 then
+                        if remaining >= 60 then
+                            button.cdText:SetText(string.format("%d m", math.ceil(remaining / 60)))
+                        else
+                            button.cdText:SetText(math.ceil(remaining))
+                        end
+                        button.cdText:Show()
+                    else
+                        button.cdText:Hide()
+                    end
                 else
                     button.cdText:Hide()
                 end
@@ -184,7 +250,7 @@ end
 
 -- Create menu listing all available trinkets
 function ATS:ShowMenu(anchor)
-    if AutoTrinketSwitcherDB.menuOnlyOutOfCombat and InCombatLockdown() then return end
+    if AutoTrinketSwitcherCharDB.menuOnlyOutOfCombat and InCombatLockdown() then return end
     if not self.menu then
         -- Backdrop support was removed from default frames in recent clients, so
         -- we conditionally use the BackdropTemplate to restore SetBackdrop.
@@ -216,15 +282,28 @@ function ATS:ShowMenu(anchor)
     wipe(self.menu.icons)
 
     local trinkets = ScanTrinkets()
-    local prev
+    local wrap = math.min(30, math.max(1, AutoTrinketSwitcherDB.wrapAt))
+    local dir = AutoTrinketSwitcherDB.menuPosition
+    local isVertical = dir == "LEFT" or dir == "RIGHT"
+    local size, spacing = 32, 4
+    local cols, rows = 0, 0
+
     for i, itemID in ipairs(trinkets) do
         local btn = self.menu.icons[i] or CreateFrame("Button", nil, self.menu)
-        btn:SetSize(32, 32)
-        if prev then
-            btn:SetPoint("LEFT", prev, "RIGHT", 4, 0)
+        btn:SetSize(size, size)
+        btn:ClearAllPoints()
+        local col, row
+        if isVertical then
+            col = math.floor((i - 1) / wrap)
+            row = (i - 1) % wrap
         else
-            btn:SetPoint("LEFT", 4, 0)
+            row = math.floor((i - 1) / wrap)
+            col = (i - 1) % wrap
         end
+        btn:SetPoint("TOPLEFT", 4 + col * (size + spacing), -4 - row * (size + spacing))
+        cols = math.max(cols, col + 1)
+        rows = math.max(rows, row + 1)
+
         btn.icon = btn.icon or btn:CreateTexture(nil, "BACKGROUND")
         btn.icon:SetAllPoints(true)
         btn.icon:SetTexture(GetItemIcon(itemID) or 134400)
@@ -239,19 +318,43 @@ function ATS:ShowMenu(anchor)
         btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         -- Use shift+left click for slot 13 and shift+right click for slot 14
         btn:SetScript("OnClick", function(self, mouse)
-            if not IsShiftKeyDown() then return end
-            local slot = mouse == "LeftButton" and 13 or 14
-            ATS:ToggleTrinket(slot, self.itemID)
-            ATS:RefreshMenuNumbers()
+            if IsShiftKeyDown() then
+                local slot = mouse == "LeftButton" and 13 or 14
+                ATS:ToggleTrinket(slot, self.itemID)
+                ATS:RefreshMenuNumbers()
+            elseif mouse == "RightButton" and AutoTrinketSwitcherCharDB.tooltipMode == "RIGHTCLICK" then
+                ATS:ShowItemTooltip(self, self.itemID)
+            end
         end)
+        
+        btn:SetScript("OnEnter", function(self)
+            if AutoTrinketSwitcherDB.showTooltips then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetItemByID(self.itemID)
+            end
+        end)
+        btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
         self.menu.icons[i] = btn
         btn:Show()
-        prev = btn
     end
 
+    local width = 8 + cols * (size + spacing) - spacing
+    local height = 8 + rows * (size + spacing) - spacing
+    self.menu:SetSize(width, height)
+
     self.menu.anchor = anchor
-    self.menu:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
+    self.menu:ClearAllPoints()
+    if dir == "TOP" then
+        self.menu:SetPoint("BOTTOM", anchor, "TOP", 0, 4)
+    elseif dir == "LEFT" then
+        self.menu:SetPoint("RIGHT", anchor, "LEFT", -4, 0)
+    elseif dir == "RIGHT" then
+        self.menu:SetPoint("LEFT", anchor, "RIGHT", 4, 0)
+    else
+        self.menu:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
+    end
+
     self:RefreshMenuNumbers()
     self.menu:Show()
     self:ApplyColorSettings()
@@ -288,7 +391,7 @@ function ATS:CreateButtons()
     frame:SetSize(84, 44)
     local pos = AutoTrinketSwitcherCharDB.buttonPos or {}
     frame:SetPoint(pos.point or "CENTER", UIParent, pos.relativePoint or "CENTER", pos.x or 0, pos.y or 0)
-    frame:EnableMouse(true)
+    frame:EnableMouse(not AutoTrinketSwitcherDB.lockWindows)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
@@ -323,8 +426,8 @@ function ATS:CreateButtons()
         btn:SetPoint("LEFT", 4 + (index - 1) * 40, 0)
 
         -- Only react to left clicks and let the secure handler execute the macro
-        btn:RegisterForClicks("LeftButtonUp")
-        btn:SetAttribute("type", "macro")
+        btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        btn:SetAttribute("type1", "macro")
         btn:SetAttribute("macrotext", "/use " .. slot)
 
         btn.icon = btn:CreateTexture(nil, "BACKGROUND")
@@ -333,10 +436,12 @@ function ATS:CreateButtons()
         -- Cooldown overlay and countdown text
         btn.cooldown = CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
         btn.cooldown:SetAllPoints(true)
+        btn.cooldown:SetFrameLevel(btn:GetFrameLevel())
         btn.cooldown:SetDrawEdge(false)
         btn.cooldown:Hide()
-        btn.cdText = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        btn.cdText = btn.cooldown:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
         btn.cdText:SetPoint("CENTER")
+        btn.cdText:SetDrawLayer("OVERLAY", 7)
         btn.cdText:Hide()
 
         btn.glow = btn:CreateTexture(nil, "OVERLAY")
@@ -347,14 +452,25 @@ function ATS:CreateButtons()
         btn.glow:Hide()
 
         btn.slot = slot
-        btn:SetScript("OnEnter", function() ATS:ShowMenu(btn) end)
-        btn:SetScript("OnLeave", function() ATS:TryHideMenu() end)
+        btn:SetScript("OnEnter", function(self)
+            ATS:ShowMenu(btn)
+            if AutoTrinketSwitcherDB.showTooltips then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetInventoryItem("player", slot)
+            end
+        end)
+        btn:SetScript("OnLeave", function()
+            ATS:TryHideMenu()
+            GameTooltip:Hide()
+        end)
 
         self.buttons[slot] = btn
     end
 
     self:UpdateButtons()
     self:ApplyColorSettings()
+    self:UpdateCooldownFont()
+    self:UpdateLockState()
 end
 
 -- Create a minimap button for quick toggles
