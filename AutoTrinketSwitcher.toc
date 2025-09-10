@@ -1,0 +1,9 @@
+## Interface: 11500
+## Title: AutoTrinketSwitcher
+## Notes: Automatically switches trinkets with an options panel and clickable trinket slots
+## Author: ChatGPT
+## Version: 1.0
+## SavedVariables: AutoTrinketSwitcherDB
+## SavedVariablesPerCharacter: AutoTrinketSwitcherCharDB
+AutoTrinketSwitcher.lua
+Options.lua
