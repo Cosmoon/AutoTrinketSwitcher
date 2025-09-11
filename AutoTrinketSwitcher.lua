@@ -84,7 +84,7 @@ function ATS:UpdateCooldownFont()
     local obj = AutoTrinketSwitcherCharDB.largeNumbers and NumberFontNormalLarge or NumberFontNormal
     local font, size = obj:GetFont()
     for _, button in pairs(self.buttons or {}) do
-        button.cdText:SetFont(font, size, "OUTLINE")
+        button.cdText:SetFont(font, size, "THICKOUTLINE")
     end
 end
 
@@ -205,9 +205,9 @@ function ATS:UpdateButtons()
         local itemID = GetInventoryItemID("player", slot)
         local texture = GetInventoryItemTexture("player", slot)
         if texture then
-            button.icon.SetTexture(button.icon, texture)
+            button.icon:SetTexture(texture)
         else
-            button.icon.SetTexture(button.icon, 134400) -- default icon
+            button.icon:SetTexture(134400) -- default icon
         end
         if PendingSwap(slot) then
             local c = AutoTrinketSwitcherCharDB.colors.glow
@@ -427,7 +427,7 @@ function ATS:CreateButtons()
 
         btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         btn:SetAttribute("type1", "macro")
-        btn.SetAttribute(btn, "macrotext", "/use " .. slot)
+        btn:SetAttribute("macrotext", "/use " .. slot)
 
         btn.icon = btn:CreateTexture(nil, "BACKGROUND")
         btn.icon:SetAllPoints(true)
@@ -451,7 +451,8 @@ function ATS:CreateButtons()
         btn.glow:Hide()
 
         btn.slot = slot
-        btn:SetScript("OnClick", function(self, mouse)
+        -- Use PostClick so the SecureActionButton's default OnClick handler still fires
+        btn:SetScript("PostClick", function(self, mouse)
             if mouse == "RightButton" and AutoTrinketSwitcherCharDB.tooltipMode == "RIGHTCLICK" then
                 ATS:ShowTooltip(self, slot)
             end
