@@ -7,6 +7,7 @@ local function EnsureDB()
 
     db.queues = db.queues or { [13] = {}, [14] = {} }
     db.menuOnlyOutOfCombat = db.menuOnlyOutOfCombat ~= false
+    db.autoSwitch = db.autoSwitch ~= false
 
     if db.showCooldowns ~= nil and db.showCooldownNumbers == nil then
         db.showCooldownNumbers = db.showCooldowns
@@ -16,6 +17,7 @@ local function EnsureDB()
     db.largeNumbers = db.largeNumbers or false
     db.lockWindows = db.lockWindows or false
     db.tooltipMode = db.tooltipMode or "HOVER"
+    db.useDefaultTooltipAnchor = (db.useDefaultTooltipAnchor ~= false)
     db.tinyTooltips = db.tinyTooltips or false
     db.menuPosition = db.menuPosition or "BOTTOM"
     db.wrapAt = db.wrapAt or 10
@@ -24,8 +26,26 @@ local function EnsureDB()
     db.colors.slot13 = db.colors.slot13 or { r = 0, g = 1, b = 0 }
     db.colors.slot14 = db.colors.slot14 or { r = 1, g = 0.82, b = 0 }
     db.colors.glow   = db.colors.glow   or { r = 1, g = 1, b = 0 }
+    db.colors.manualBadge = db.colors.manualBadge or { r = 1, g = 1, b = 1 }
 
     db.buttonPos = db.buttonPos or { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 }
+    db.manual = db.manual or { [13] = false, [14] = false }
+    db.queueNumberSize = db.queueNumberSize or 12
+    db.wrapDirection = db.wrapDirection or "HORIZONTAL" -- or VERTICAL
+end
+
+-- Helper to position the tooltip at the game's default location (or legacy side-anchored)
+local function SetTooltipOwner(frame)
+    if AutoTrinketSwitcherCharDB.useDefaultTooltipAnchor then
+        GameTooltip:SetOwner(frame, "ANCHOR_NONE")
+        if GameTooltip_SetDefaultAnchor then
+            GameTooltip_SetDefaultAnchor(GameTooltip, frame)
+        else
+            GameTooltip:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -13, 64)
+        end
+    else
+        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+    end
 end
 
 -- Utility: get remaining cooldown for an itemID
@@ -40,6 +60,74 @@ local function GetItemRemaining(itemID)
     return remaining
 end
 
+-- Find index of an item within a queue (or large number if not present)
+local function QueueIndex(slot, itemID)
+    if not itemID then return math.huge end
+    local q = AutoTrinketSwitcherCharDB.queues[slot]
+    for i, id in ipairs(q) do
+        if id == itemID then return i end
+    end
+    return math.huge
+end
+
+-- Helper: does an item have a usable effect?
+local function ItemHasUse(itemID)
+    if not itemID then return false end
+    local useName = GetItemSpell(itemID)
+    return useName ~= nil
+end
+
+-- If the top-priority item for a slot isn't ready, reserve the currently equipped
+-- slot item (if it is in that slot's queue) so the other slot won't steal it.
+local function GetReservationForSlot(slot)
+    if AutoTrinketSwitcherCharDB.manual and AutoTrinketSwitcherCharDB.manual[slot] then return nil end
+    local q = AutoTrinketSwitcherCharDB.queues[slot]
+    if not q or #q == 0 then return nil end
+    local topWanted = q[1]
+    if GetItemRemaining(topWanted) > 30 then
+        local equippedID = GetInventoryItemID("player", slot)
+        -- Only reserve if currently equipped is part of this slot's queue
+        for _, id in ipairs(q) do
+            if id == equippedID then return equippedID end
+        end
+    end
+    return nil
+end
+
+-- Choose the first ready trinket for a slot, respecting manual mode and current item cooldown rule,
+-- but allowing an upgrade to a higher-priority ready trinket even if the equipped usable trinket is near ready.
+local function ChooseCandidate(slot, avoidID)
+    if AutoTrinketSwitcherCharDB.manual and AutoTrinketSwitcherCharDB.manual[slot] then return nil end
+    local equippedID = GetInventoryItemID("player", slot)
+    local equippedCD = GetItemRemaining(equippedID)
+    local equippedHasUse = ItemHasUse(equippedID)
+
+    local queue = AutoTrinketSwitcherCharDB.queues[slot]
+    local equippedIdx = QueueIndex(slot, equippedID)
+
+    local targetID, targetIdx
+    local otherSlot = (slot == 13) and 14 or 13
+    local reservedOther = GetReservationForSlot(otherSlot)
+    for i, itemID in ipairs(queue) do
+        if itemID ~= equippedID and itemID ~= avoidID and itemID ~= reservedOther then
+            local cd = GetItemRemaining(itemID)
+            if cd <= 30 then
+                targetID, targetIdx = itemID, i
+                break
+            end
+        end
+    end
+    if not targetID then return nil end
+
+    -- Apply "don't swap off a near-ready usable trinket" unless the target has strictly higher priority
+    if equippedHasUse and equippedCD <= 30 then
+        if targetIdx and equippedIdx and targetIdx >= equippedIdx then
+            return nil
+        end
+    end
+
+    return targetID
+end
 -- Return queue position of an item for a slot or nil
 function ATS:GetQueuePosition(slot, itemID)
     for i, id in ipairs(AutoTrinketSwitcherCharDB.queues[slot]) do
@@ -77,14 +165,27 @@ function ATS:ApplyColorSettings()
         if button.glow then
             button.glow:SetVertexColor(glowColor.r, glowColor.g, glowColor.b, 1)
         end
+        if button.manualBadge then
+            local mb = AutoTrinketSwitcherCharDB.colors.manualBadge
+            button.manualBadge:SetTextColor(mb.r, mb.g, mb.b, 1)
+        end
     end
 end
 
 function ATS:UpdateCooldownFont()
-    local obj = AutoTrinketSwitcherCharDB.largeNumbers and NumberFontNormalLarge or NumberFontNormal
-    local font, size = obj:GetFont()
+    local font, size = NumberFontNormal:GetFont()
+    if AutoTrinketSwitcherCharDB.largeNumbers then
+        size = size + 3
+    end
     for _, button in pairs(self.buttons or {}) do
         button.cdText:SetFont(font, size, "THICKOUTLINE")
+    end
+    if self.menu and self.menu.icons then
+        for _, btn in ipairs(self.menu.icons) do
+            if btn.cdText then
+                btn.cdText:SetFont(font, size, "THICKOUTLINE")
+            end
+        end
     end
 end
 
@@ -101,7 +202,7 @@ function ATS:ShowTooltip(frame, slot)
     if AutoTrinketSwitcherCharDB.tinyTooltips then
         local itemID = GetInventoryItemID("player", slot)
         if not itemID then return end
-        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        SetTooltipOwner(frame)
         local name = GetItemInfo(itemID)
         if name then GameTooltip:SetText(name) end
         local _, desc = GetItemSpell(itemID)
@@ -116,45 +217,32 @@ end
 -- Display tooltip for an itemID (used in the menu)
 function ATS:ShowItemTooltip(frame, itemID)
     if AutoTrinketSwitcherCharDB.tinyTooltips then
-        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        SetTooltipOwner(frame)
         local name = GetItemInfo(itemID)
         if name then GameTooltip:SetText(name) end
         local _, desc = GetItemSpell(itemID)
         if desc then GameTooltip:AddLine(desc, 1, 1, 1) end
         GameTooltip:Show()
     else
-        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        SetTooltipOwner(frame)
         GameTooltip:SetItemByID(itemID)
     end
-end
-
--- Scan bags for trinkets and return list of itemIDs
-local function ScanTrinkets()
-    local trinkets = {}
-    -- Use the modern C_Container API when available for bag scanning
-    local getSlots = C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots
-    local getItemID = C_Container and C_Container.GetContainerItemID or GetContainerItemID
-
-    for bag = 0, NUM_BAG_SLOTS do
-        for slot = 1, getSlots(bag) do
-            local itemID = getItemID(bag, slot)
-            if itemID then
-                local _, _, _, _, _, _, _, _, equipLoc = GetItemInfo(itemID)
-                if equipLoc == "INVTYPE_TRINKET" then
-                    table.insert(trinkets, itemID)
-                end
-            end
-        end
-    end
-    return trinkets
 end
 
 -- Attempt to equip a trinket for a given slot based on the rules
 local function CheckSlot(slot)
     local equippedID = GetInventoryItemID("player", slot)
     local equippedCD = GetItemRemaining(equippedID)
-    -- Only swap if the currently equipped trinket has more than 60s cooldown
-    if equippedCD <= 60 then return end
+    local equippedHasUse = false
+    if equippedID then
+        local useName = GetItemSpell(equippedID)
+        equippedHasUse = useName ~= nil
+    end
+    -- Only block swapping if the equipped trinket is a usable item AND its cooldown <= 30s
+    if equippedHasUse and equippedCD <= 30 then return end
+
+    -- Respect per-slot manual mode
+    if AutoTrinketSwitcherCharDB.manual and AutoTrinketSwitcherCharDB.manual[slot] then return end
 
     for _, itemID in ipairs(AutoTrinketSwitcherCharDB.queues[slot]) do
         if itemID ~= equippedID then
@@ -172,16 +260,25 @@ local function CheckSlot(slot)
     end
 end
 
+-- Apply font size to queue numbers in the menu
+function ATS:ApplyMenuQueueFont()
+    if not (self.menu and self.menu.icons) then return end
+    local f, defaultSize = GameFontNormal:GetFont()
+    local size = AutoTrinketSwitcherCharDB.queueNumberSize or defaultSize or 12
+    for _, btn in ipairs(self.menu.icons) do
+        if btn.pos13 then btn.pos13:SetFont(f, size) end
+        if btn.pos14 then btn.pos14:SetFont(f, size) end
+    end
+end
+
 -- Determine if a swap would occur for a slot when out of combat
 local function PendingSwap(slot)
     local equippedID = GetInventoryItemID("player", slot)
-    local equippedCD = GetItemRemaining(equippedID)
-    if equippedCD <= 60 then return false end
-
+    -- Announce a switch when a queued trinket is within 35s of being ready (or ready)
     for _, itemID in ipairs(AutoTrinketSwitcherCharDB.queues[slot]) do
         if itemID ~= equippedID then
             local cd = GetItemRemaining(itemID)
-            if cd <= 30 then
+            if cd <= 35 then
                 return true
             end
         end
@@ -191,9 +288,52 @@ end
 
 -- Run check for both slots if out of combat
 function ATS:PerformCheck()
-    if not InCombatLockdown() then
-        CheckSlot(13)
-        CheckSlot(14)
+    -- Periodically ensure mount state is respected even if an event was missed
+    if self.UpdateMountState then self:UpdateMountState() end
+
+    -- After dismount, give gear a short settling period to avoid oscillation
+    if self.resumeGuardUntil and GetTime() < self.resumeGuardUntil then
+        self:UpdateButtons()
+        return
+    end
+
+    if AutoTrinketSwitcherCharDB.autoSwitch and not InCombatLockdown() then
+        local cand13 = ChooseCandidate(13)
+        local cand14 = ChooseCandidate(14)
+        if cand13 and cand14 and cand13 == cand14 then
+            local alt14 = ChooseCandidate(14, cand13)
+            cand14 = alt14
+        end
+        if cand13 then
+            local allow = true
+            if self.lastEquip and self.lastEquip[13] and (GetTime() - self.lastEquip[13] < 0.75) then
+                allow = false
+            end
+            if allow then
+            if C_Item and C_Item.EquipItemByName then
+                C_Item.EquipItemByName(cand13, 13)
+            else
+                EquipItemByName(cand13, 13)
+            end
+            self.lastEquip = self.lastEquip or {}
+            self.lastEquip[13] = GetTime()
+            end
+        end
+        if cand14 then
+            local allow = true
+            if self.lastEquip and self.lastEquip[14] and (GetTime() - self.lastEquip[14] < 0.75) then
+                allow = false
+            end
+            if allow then
+            if C_Item and C_Item.EquipItemByName then
+                C_Item.EquipItemByName(cand14, 14)
+            else
+                EquipItemByName(cand14, 14)
+            end
+            self.lastEquip = self.lastEquip or {}
+            self.lastEquip[14] = GetTime()
+            end
+        end
     end
     self:UpdateButtons()
 end
@@ -209,12 +349,23 @@ function ATS:UpdateButtons()
         else
             button.icon:SetTexture(134400) -- default icon
         end
-        if PendingSwap(slot) then
+        if AutoTrinketSwitcherCharDB.autoSwitch and not (AutoTrinketSwitcherCharDB.manual and AutoTrinketSwitcherCharDB.manual[slot]) and InCombatLockdown() and PendingSwap(slot) then
             local c = AutoTrinketSwitcherCharDB.colors.glow
             button.glow:SetVertexColor(c.r, c.g, c.b, 1)
             button.glow:Show()
         else
             button.glow:Hide()
+        end
+
+        -- Manual badge visibility: show when slot is manual OR global auto-switch is off
+        if button.manualBadge then
+            local isManualSlot = AutoTrinketSwitcherCharDB.manual and AutoTrinketSwitcherCharDB.manual[slot]
+            local globalManual = not AutoTrinketSwitcherCharDB.autoSwitch
+            if isManualSlot or globalManual then
+                button.manualBadge:Show()
+            else
+                button.manualBadge:Hide()
+            end
         end
 
         -- Handle cooldown overlay and text
@@ -247,138 +398,9 @@ function ATS:UpdateButtons()
             button.cdText:Hide()
         end
     end
-end
-
--- Create menu listing all available trinkets
-function ATS:ShowMenu(anchor)
-    if AutoTrinketSwitcherCharDB.menuOnlyOutOfCombat and InCombatLockdown() then return end
-    if not self.menu then
-        -- Backdrop support was removed from default frames in recent clients, so
-        -- we conditionally use the BackdropTemplate to restore SetBackdrop.
-        local template = BackdropTemplateMixin and "BackdropTemplate" or nil
-        self.menu = CreateFrame("Frame", "ATSMenu", UIParent, template)
-        self.menu:SetFrameStrata("DIALOG")
-        self.menu:SetSize(200, 50)
-        self.menu.icons = {}
-
-        -- Only call SetBackdrop when the method exists
-        if self.menu.SetBackdrop then
-            self.menu:SetBackdrop({
-                bgFile = "Interface/Tooltips/UI-Tooltip-Background",
-                edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-                tile = true,
-                tileSize = 16,
-                edgeSize = 16,
-                insets = { left = 3, right = 3, top = 3, bottom = 3 },
-            })
-            self.menu:SetBackdropColor(0, 0, 0, 0.8)
-        end
-
-        self.menu:SetScript("OnLeave", function() ATS:TryHideMenu() end)
+    if self.menu and self.menu:IsShown() then
+        self:UpdateMenuCooldowns()
     end
-
-    for _, icon in ipairs(self.menu.icons) do
-        icon:Hide()
-    end
-    wipe(self.menu.icons)
-
-    local trinkets = ScanTrinkets()
-    local wrap = math.min(30, math.max(1, AutoTrinketSwitcherCharDB.wrapAt))
-    local dir = AutoTrinketSwitcherCharDB.menuPosition
-    local isVertical = dir == "LEFT" or dir == "RIGHT"
-    local size, spacing = 32, 4
-    local cols, rows = 0, 0
-
-    for i, itemID in ipairs(trinkets) do
-        local btn = self.menu.icons[i] or CreateFrame("Button", nil, self.menu)
-        btn:SetSize(size, size)
-        btn:ClearAllPoints()
-        local col, row
-        if isVertical then
-            col = math.floor((i - 1) / wrap)
-            row = (i - 1) % wrap
-        else
-            row = math.floor((i - 1) / wrap)
-            col = (i - 1) % wrap
-        end
-        btn:SetPoint("TOPLEFT", 4 + col * (size + spacing), -4 - row * (size + spacing))
-        cols = math.max(cols, col + 1)
-        rows = math.max(rows, row + 1)
-
-        btn.icon = btn.icon or btn:CreateTexture(nil, "BACKGROUND")
-        btn.icon:SetAllPoints(true)
-        btn.icon:SetTexture(GetItemIcon(itemID) or 134400)
-        btn.itemID = itemID
-
-        btn.pos13 = btn.pos13 or btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        btn.pos13:SetPoint("TOPLEFT", 2, -2)
-
-        btn.pos14 = btn.pos14 or btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        btn.pos14:SetPoint("TOPRIGHT", -2, -2)
-
-        btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-        -- Use shift+left click for slot 13 and shift+right click for slot 14
-        btn:SetScript("OnClick", function(self, mouse)
-            if IsShiftKeyDown() then
-                local slot = mouse == "LeftButton" and 13 or 14
-                ATS:ToggleTrinket(slot, self.itemID)
-                ATS:RefreshMenuNumbers()
-            elseif mouse == "RightButton" and AutoTrinketSwitcherCharDB.tooltipMode == "RIGHTCLICK" then
-                ATS:ShowItemTooltip(self, self.itemID)
-            end
-        end)
-
-        btn:SetScript("OnEnter", function(self)
-            if AutoTrinketSwitcherCharDB.tooltipMode == "HOVER" then
-                ATS:ShowItemTooltip(self, self.itemID)
-            end
-        end)
-        btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-        self.menu.icons[i] = btn
-        btn:Show()
-    end
-
-    local width = 8 + cols * (size + spacing) - spacing
-    local height = 8 + rows * (size + spacing) - spacing
-    self.menu:SetSize(width, height)
-
-    self.menu.anchor = anchor
-    self.menu:ClearAllPoints()
-    if dir == "TOP" then
-        self.menu:SetPoint("BOTTOM", anchor, "TOP", 0, 4)
-    elseif dir == "LEFT" then
-        self.menu:SetPoint("RIGHT", anchor, "LEFT", -4, 0)
-    elseif dir == "RIGHT" then
-        self.menu:SetPoint("LEFT", anchor, "RIGHT", 4, 0)
-    else
-        self.menu:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
-    end
-
-    self:RefreshMenuNumbers()
-    self.menu:Show()
-    self:ApplyColorSettings()
-end
-
-function ATS:RefreshMenuNumbers()
-    if not self.menu or not self.menu.icons then return end
-    for _, btn in ipairs(self.menu.icons) do
-        local p13 = self:GetQueuePosition(13, btn.itemID)
-        local p14 = self:GetQueuePosition(14, btn.itemID)
-        if p13 then btn.pos13:SetText(p13) else btn.pos13:SetText("") end
-        if p14 then btn.pos14:SetText(p14) else btn.pos14:SetText("") end
-    end
-end
-
-function ATS:TryHideMenu()
-    C_Timer.After(0.1, function()
-        if not self.menu then return end
-        if self.menu:IsMouseOver() then return end
-        for _, btn in pairs(self.buttons or {}) do
-            if btn:IsMouseOver() then return end
-        end
-        self.menu:Hide()
-    end)
 end
 
 -- Create the two slot buttons
@@ -450,23 +472,38 @@ function ATS:CreateButtons()
         btn.glow:SetSize(60, 60)
         btn.glow:Hide()
 
+        -- Manual mode badge (bottom-left)
+        btn.manualBadge = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        btn.manualBadge:SetPoint("BOTTOMLEFT", 2, 2)
+        btn.manualBadge:SetText("M")
+        btn.manualBadge:SetTextColor(1, 1, 1, 1)
+        btn.manualBadge:SetDrawLayer("OVERLAY", 8)
+        btn.manualBadge:Hide()
+
         btn.slot = slot
         -- Use PostClick so the SecureActionButton's default OnClick handler still fires
         btn:SetScript("PostClick", function(self, mouse)
             if mouse == "RightButton" and AutoTrinketSwitcherCharDB.tooltipMode == "RIGHTCLICK" then
-                ATS:ShowTooltip(self, slot)
+                ATS.tooltipPinned = not ATS.tooltipPinned
+                if ATS.tooltipPinned then
+                    ATS:ShowTooltip(self, slot)
+                else
+                    GameTooltip:Hide()
+                end
             end
         end)
 
         btn:SetScript("OnEnter", function(self)
             ATS:ShowMenu(btn)
-            if AutoTrinketSwitcherCharDB.tooltipMode == "HOVER" then
+            if AutoTrinketSwitcherCharDB.tooltipMode == "HOVER" or ATS.tooltipPinned then
                 ATS:ShowTooltip(self, slot)
             end
         end)
         btn:SetScript("OnLeave", function()
             ATS:TryHideMenu()
-            GameTooltip:Hide()
+            if not ATS.tooltipPinned then
+                GameTooltip:Hide()
+            end
         end)
 
         self.buttons[slot] = btn
@@ -481,14 +518,25 @@ end
 -- Create a minimap button for quick toggles
 function ATS:CreateMinimapButton()
     local btn = CreateFrame("Button", "ATS_MinimapButton", Minimap)
-    btn:SetSize(32, 32)
+    btn:SetSize(40, 40)
     btn:SetFrameStrata("MEDIUM")
     btn:SetPoint("TOPLEFT")
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
     btn.icon = btn:CreateTexture(nil, "BACKGROUND")
-    btn.icon:SetAllPoints(true)
-    btn.icon:SetTexture(134430) -- generic trinket icon
+    -- Use a clear trinket-like icon that is always available
+    local faction = UnitFactionGroup and UnitFactionGroup("player")
+    if faction == "Alliance" then
+        btn.icon:SetTexture("Interface/TargetingFrame/UI-PVP-ALLIANCE")
+    elseif faction == "Horde" then
+        btn.icon:SetTexture("Interface/TargetingFrame/UI-PVP-Horde")
+    else
+        btn.icon:SetTexture(134430)
+    end
+    btn.icon:ClearAllPoints()
+    btn.icon:SetPoint("CENTER", 0, 0)
+    btn.icon:SetSize(34, 34)
+    btn.icon:SetTexCoord(0.04, 0.96, 0.04, 0.96)
 
     btn:SetHighlightTexture("Interface/Minimap/UI-Minimap-ZoomButton-Highlight")
 
@@ -499,20 +547,42 @@ function ATS:CreateMinimapButton()
             else
                 ATS.buttonFrame:Show()
             end
-        else
-            if Settings and Settings.OpenToCategory and ATS.optionsCategory then
-                Settings.OpenToCategory(ATS.optionsCategory.ID)
-            elseif InterfaceOptionsFrame_OpenToCategory and ATS.optionsPanel then
-                InterfaceOptionsFrame_OpenToCategory(ATS.optionsPanel)
+        elseif mouse == "RightButton" then
+            if IsShiftKeyDown() then
+                AutoTrinketSwitcherCharDB.lockWindows = not AutoTrinketSwitcherCharDB.lockWindows
+                ATS:UpdateLockState()
+            elseif IsControlKeyDown() then
+                AutoTrinketSwitcherCharDB.autoSwitch = not AutoTrinketSwitcherCharDB.autoSwitch
+                ATS:UpdateButtons()
+            else
+                if ATS.optionsWindow then
+                    if ATS.optionsWindow:IsShown() then
+                        ATS.optionsWindow:Hide()
+                        if ATS.optionsPanel then ATS.optionsPanel:Hide() end
+                    else
+                        if ATS.optionsPanel then ATS.optionsPanel:Show() end
+                        ATS.optionsWindow:Show()
+                    end
+                end
             end
+            -- Also hide the trinket menu if it is open
+            if ATS.menu and ATS.menu:IsShown() then ATS.menu:Hide() end
         end
     end)
 
     btn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("AutoTrinketSwitcher")
-        GameTooltip:AddLine("Left-click: Toggle trinkets", 1, 1, 1)
-        GameTooltip:AddLine("Right-click: Toggle options", 1, 1, 1)
+        local icon = "|TInterface/PaperDoll/UI-PaperDoll-Slot-Trinket:16:16|t"
+        GameTooltip:SetText(icon .. " AutoTrinketSwitcher")
+        local WHITE = "FFFFFFFF"
+        local GOLD  = "FFFFD100"
+        local function line(label, text)
+            return "|c"..WHITE..label.."|r |c"..GOLD..text.."|r"
+        end
+        GameTooltip:AddLine(line("Left-Click:", "Show/Hide Trinkets"))
+        GameTooltip:AddLine(line("Right-Click:", "Open Option Menu"))
+        GameTooltip:AddLine(line("Shift+ Right-Click:", "Lock/Unlock Buttons"))
+        GameTooltip:AddLine(line("Ctrl + Right-Click:", "Toggle Auto Switching"))
         GameTooltip:Show()
     end)
     btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -525,8 +595,11 @@ function ATS:PLAYER_LOGIN()
     self:CreateOptions()
     self:CreateButtons()
     self:CreateMinimapButton()
+    self.tooltipPinned = false
     self.elapsed = 0
     self.cdElapsed = 0
+    self.mountAutoModified = false
+    self.prevAutoSwitch = nil
     self:SetScript("OnUpdate", function(_, e)
         self.elapsed = self.elapsed + e
         self.cdElapsed = self.cdElapsed + e
@@ -539,14 +612,60 @@ function ATS:PLAYER_LOGIN()
             self:UpdateButtons()
         end
     end)
+    -- Initialize mount state
+    if self.UpdateMountState then self:UpdateMountState() end
 end
 
 ATS:RegisterEvent("PLAYER_LOGIN")
 ATS:RegisterEvent("PLAYER_REGEN_ENABLED")
+ATS:RegisterEvent("UNIT_AURA")
+ATS:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+ATS:RegisterEvent("PLAYER_ENTERING_WORLD")
+ATS:RegisterEvent("ZONE_CHANGED")
+ATS:RegisterEvent("ZONE_CHANGED_INDOORS")
+ATS:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 ATS:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_REGEN_ENABLED" then
         self:PerformCheck()
+    elseif event == "UNIT_AURA" then
+        -- React to mount state changes via aura changes
+        self:UpdateMountState()
+    elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
+        self:UpdateMountState()
+    elseif event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
+        self:UpdateMountState()
     elseif self[event] then
         self[event](self)
     end
 end)
+
+-- Mount handling: auto-disable autoSwitch when mounting; restore previous state on dismount
+function ATS:UpdateMountState()
+    local mounted = false
+    if IsMounted then
+        mounted = IsMounted()
+    else
+        -- Fallback: simple check via movement speed or auras is omitted to avoid false positives in Classic
+        mounted = false
+    end
+
+    if mounted then
+        if not self.mountAutoModified then
+            self.prevAutoSwitch = AutoTrinketSwitcherCharDB.autoSwitch
+            if AutoTrinketSwitcherCharDB.autoSwitch then
+                AutoTrinketSwitcherCharDB.autoSwitch = false
+                self.mountAutoModified = true
+                self:UpdateButtons()
+            end
+        end
+    else
+        if self.mountAutoModified then
+            AutoTrinketSwitcherCharDB.autoSwitch = self.prevAutoSwitch and true or false
+            self.prevAutoSwitch = nil
+            self.mountAutoModified = false
+            self:UpdateButtons()
+            -- Guard against immediate rapid swaps after dismount
+            self.resumeGuardUntil = GetTime() + 1.5
+        end
+    end
+end

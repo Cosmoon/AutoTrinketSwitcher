@@ -40,19 +40,42 @@ function ATS:CreateOptions()
             if key == "showCooldownNumbers" then ATS:UpdateButtons() end
             if key == "largeNumbers" then ATS:UpdateCooldownFont() end
             if key == "lockWindows" then ATS:UpdateLockState() end
+            if key == "autoSwitch" then ATS:UpdateButtons() end
+            if key == "useDefaultTooltipAnchor" then -- nothing immediate besides tooltip placement
+                -- no-op; placement applied next time tooltips show
+            end
         end)
         return cb
     end
 
     -- General settings box
-    local generalBox, gLast = CreateBox("General settings", title)
-    gLast = CreateCheck(generalBox, "Show menu only when out of combat", "menuOnlyOutOfCombat", gLast)
-    gLast = CreateCheck(generalBox, "Show cooldown numbers", "showCooldownNumbers", gLast)
-    gLast = CreateCheck(generalBox, "Use large cooldown numbers", "largeNumbers", gLast)
-    gLast = CreateCheck(generalBox, "Lock windows", "lockWindows", gLast)
+    local generalBox, gHeader = CreateBox("General settings", title)
+    local gColLeftX, gColRightX = 16, 260
+    local gRowY = -16
+    local g1 = CreateCheck(generalBox, "Enable auto switching", "autoSwitch", gHeader)
+    local g2 = CreateCheck(generalBox, "Show cooldown numbers", "showCooldownNumbers", gHeader)
+    local g3 = CreateCheck(generalBox, "Use large cooldown numbers", "largeNumbers", gHeader)
+    local g4 = CreateCheck(generalBox, "Lock windows", "lockWindows", gHeader)
+
+    -- New: default tooltip anchoring toggle
+    local g5 = CreateCheck(generalBox, "Use default tooltip position", "useDefaultTooltipAnchor", gHeader)
+    local g6 = CreateCheck(generalBox, "Use tiny tooltips", "tinyTooltips", gHeader)
+
+    -- Reposition into two columns
+    local function PlaceCheck(cb, col, row)
+        cb:ClearAllPoints()
+        local x = (col == 1) and gColLeftX or gColRightX
+        cb:SetPoint("TOPLEFT", gHeader, "BOTTOMLEFT", x, gRowY - (row - 1) * 28)
+    end
+    PlaceCheck(g1, 1, 1)
+    PlaceCheck(g2, 1, 2)
+    PlaceCheck(g3, 1, 3)
+    PlaceCheck(g4, 2, 1)
+    PlaceCheck(g5, 2, 2)
+    PlaceCheck(g6, 2, 3)
 
     local tooltipLabel = generalBox:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    tooltipLabel:SetPoint("TOPLEFT", gLast, "BOTTOMLEFT", 0, -16)
+    tooltipLabel:SetPoint("TOPLEFT", gHeader, "BOTTOMLEFT", gColLeftX, gRowY - 3 * 28 - 16)
     tooltipLabel:SetText("Tooltips")
 
     local tooltipDrop = CreateFrame("Frame", "ATSTooltipDropdown", generalBox, "UIDropDownMenuTemplate")
@@ -73,12 +96,18 @@ function ATS:CreateOptions()
     end)
     UIDropDownMenu_SetSelectedValue(tooltipDrop, db.tooltipMode)
 
-    gLast = CreateCheck(generalBox, "Use tiny tooltips", "tinyTooltips", tooltipDrop)
+    -- menu-only-out-of-combat moved to Menu settings below
 
     -- Menu settings box
     local menuBox, mHeader = CreateBox("Menu settings", generalBox, -16)
+    -- First line: Show menu only when out of combat
+    local menuOOC = CreateCheck(menuBox, "Show menu only when out of combat", "menuOnlyOutOfCombat", mHeader)
+    menuOOC:ClearAllPoints()
+    menuOOC:SetPoint("TOPLEFT", mHeader, "BOTTOMLEFT", 16, -8)
+
+    -- Second line (more space): position + queue number size
     local posLabel = menuBox:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    posLabel:SetPoint("TOPLEFT", mHeader, "BOTTOMLEFT", 16, -8)
+    posLabel:SetPoint("TOPLEFT", mHeader, "BOTTOMLEFT", 16, -50)
     posLabel:SetText("Show menu on")
 
     local drop = CreateFrame("Frame", "ATSMenuPosDropdown", menuBox, "UIDropDownMenuTemplate")
@@ -102,6 +131,8 @@ function ATS:CreateOptions()
     end)
     UIDropDownMenu_SetSelectedValue(drop, db.menuPosition)
 
+    -- (wrap direction will be a toggle button next to Wrap at)
+
     local wrapSlider = CreateFrame("Slider", "ATSWrapSlider", menuBox, "OptionsSliderTemplate")
     wrapSlider:SetPoint("TOPLEFT", posLabel, "BOTTOMLEFT", -16, -40)
     wrapSlider:SetMinMaxValues(1, 30)
@@ -116,6 +147,48 @@ function ATS:CreateOptions()
         value = math.floor(value + 0.5)
         db.wrapAt = value
         _G[self:GetName() .. "Text"]:SetText("Wrap at: " .. value)
+        if ATS.menu and ATS.menu:IsShown() and ATS.menu.anchor then
+            ATS:ShowMenu(ATS.menu.anchor)
+        end
+    end)
+
+    -- Queue number font size (second line, next to position)
+    local qLabel = menuBox:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    qLabel:SetPoint("LEFT", drop, "RIGHT", 24, 0)
+    qLabel:SetText("Queue number size")
+
+    local qSlider = CreateFrame("Slider", "ATSQueueNumSizeSlider", menuBox, "OptionsSliderTemplate")
+    qSlider:SetPoint("LEFT", qLabel, "RIGHT", 8, 0)
+    qSlider:SetMinMaxValues(8, 24)
+    qSlider:SetValueStep(1)
+    qSlider:SetObeyStepOnDrag(true)
+    qSlider:SetWidth(200)
+    qSlider:SetValue(db.queueNumberSize or 12)
+    _G[qSlider:GetName() .. "Low"]:SetText("8")
+    _G[qSlider:GetName() .. "High"]:SetText("24")
+    _G[qSlider:GetName() .. "Text"]:SetText("Size: " .. (db.queueNumberSize or 12))
+    qSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value + 0.5)
+        db.queueNumberSize = value
+        _G[self:GetName() .. "Text"]:SetText("Size: " .. value)
+        ATS:ApplyMenuQueueFont()
+    end)
+
+    -- Wrap direction toggle button (next to Wrap at)
+    local wrapDirBtn = CreateFrame("Button", "ATSWrapDirButton", menuBox, "UIPanelButtonTemplate")
+    local function UpdateWrapDirButtonText()
+        if db.wrapDirection == "HORIZONTAL" then
+            wrapDirBtn:SetText("Vertical")
+        else
+            wrapDirBtn:SetText("Horizontal")
+        end
+    end
+    UpdateWrapDirButtonText()
+    wrapDirBtn:SetPoint("LEFT", wrapSlider, "RIGHT", 20, 0)
+    wrapDirBtn:SetWidth(100)
+    wrapDirBtn:SetScript("OnClick", function()
+        db.wrapDirection = (db.wrapDirection == "HORIZONTAL") and "VERTICAL" or "HORIZONTAL"
+        UpdateWrapDirButtonText()
         if ATS.menu and ATS.menu:IsShown() and ATS.menu.anchor then
             ATS:ShowMenu(ATS.menu.anchor)
         end
@@ -165,25 +238,114 @@ function ATS:CreateOptions()
         return swatch
     end
 
-    local cLast = cHeader
-    cLast = CreateColorOption(colorBox, "Slot 13", "slot13", cLast, -8)
-    cLast = CreateColorOption(colorBox, "Slot 14", "slot14", cLast)
-    cLast = CreateColorOption(colorBox, "Pending swap", "glow", cLast)
+    -- Three columns on first row
+    local c1 = CreateColorOption(colorBox, "Slot 13", "slot13", cHeader, -8)
+    c1:ClearAllPoints(); c1:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 16, -8)
+    local c2 = CreateColorOption(colorBox, "Slot 14", "slot14", cHeader, -8)
+    c2:ClearAllPoints(); c2:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 180, -8)
+    local c3 = CreateColorOption(colorBox, "Pending swap", "glow", cHeader, -8)
+    c3:ClearAllPoints(); c3:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 344, -8)
+    -- Second row (starts new line), keep 3-column grid available for future
+    local c4 = CreateColorOption(colorBox, "Manual badge", "manualBadge", cHeader, -36)
+    c4:ClearAllPoints(); c4:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 16, -36)
+
+    -- Spacer below colour box to guarantee visual padding to the window edge
+    local bottomSpacer = CreateFrame("Frame", nil, panel)
+    bottomSpacer:SetPoint("TOPLEFT", colorBox, "BOTTOMLEFT", 0, -16)
+    bottomSpacer:SetPoint("RIGHT", panel, -16, 0)
+    bottomSpacer:SetHeight(16)
 
     -- Size boxes when shown to avoid anchoring parents to children
     panel:SetScript("OnShow", function()
-        generalBox:SetHeight(generalBox:GetTop() - gLast:GetBottom() + 16)
-        menuBox:SetHeight(menuBox:GetTop() - wrapSlider:GetBottom() + 40)
-        colorBox:SetHeight(colorBox:GetTop() - cLast:GetBottom() + 16)
+        local function layout()
+            -- Compute bottom of General box by taking the lowest control (tooltip drop or last checkbox)
+            local g6b = g6 and g6:GetBottom() or nil
+            local tdb = tooltipDrop and tooltipDrop:GetBottom() or nil
+            local gBottom
+            if g6b and tdb then
+                gBottom = math.min(g6b, tdb)
+            else
+                gBottom = g6b or tdb or (gHeader:GetBottom() - 60)
+            end
+            generalBox:SetHeight(generalBox:GetTop() - gBottom + 16)
+
+            -- Place wrap direction button on third line (wrapSlider row),
+            -- horizontally aligned with the middle of the 'Queue number size' above.
+            if wrapDirBtn and wrapSlider and qSlider and menuBox and 
+               wrapSlider.GetTop and qSlider.GetLeft and menuBox.GetLeft then
+                local qCenterX = qSlider:GetLeft() + (qSlider:GetWidth() or 0) / 2
+                local wrapCenterY = (wrapSlider:GetTop() + wrapSlider:GetBottom()) / 2
+                local boxLeft = menuBox:GetLeft() or 0
+                local boxBottom = menuBox:GetBottom() or 0
+                if qCenterX and wrapCenterY and boxLeft and boxBottom then
+                    wrapDirBtn:ClearAllPoints()
+                    wrapDirBtn:SetPoint("CENTER", menuBox, "BOTTOMLEFT", qCenterX - boxLeft, wrapCenterY - boxBottom)
+                end
+            end
+
+            local mBottom = wrapSlider:GetBottom() or 0
+            if drop:GetBottom() and drop:GetBottom() < mBottom then mBottom = drop:GetBottom() end
+            if qSlider:GetBottom() and qSlider:GetBottom() < mBottom then mBottom = qSlider:GetBottom() end
+            if menuOOC:GetBottom() and menuOOC:GetBottom() < mBottom then mBottom = menuOOC:GetBottom() end
+            if wrapDirBtn:GetBottom() and wrapDirBtn:GetBottom() < mBottom then mBottom = wrapDirBtn:GetBottom() end
+            if mBottom == 0 then mBottom = (mHeader:GetBottom() - 60) end
+            menuBox:SetHeight(menuBox:GetTop() - mBottom + 40)
+
+            local last = c4 or c3
+            colorBox:SetHeight(colorBox:GetTop() - last:GetBottom() + 40)
+        end
+
+        -- Run layout now and once next frame to handle initial sizing
+        layout()
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0, function() if panel:IsShown() then layout() end end)
+        end
     end)
 
-    if Settings and Settings.RegisterAddOnCategory then
-        local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
-        category.ID = panel.name
-        Settings.RegisterAddOnCategory(category)
-        self.optionsCategory = category
-    elseif InterfaceOptions_AddCategory then
-        InterfaceOptions_AddCategory(panel)
-        self.optionsPanel = panel
+    -- Do not register with Blizzard Settings; we use a standalone window
+
+    -- Also create a standalone in-game window for this panel, so users don't need the game main menu
+    local template = BackdropTemplateMixin and "BackdropTemplate" or nil
+    local win = CreateFrame("Frame", "ATSOptionsFrame", UIParent, template)
+    win:SetFrameStrata("DIALOG")
+    win:SetToplevel(true)
+    win:SetSize(700, 560)
+    win:SetPoint("CENTER")
+    if win.SetBackdrop then
+        win:SetBackdrop({
+            bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+            edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 },
+        })
+        win:SetBackdropColor(0,0,0,0.85)
     end
+    win:Hide()
+    table.insert(UISpecialFrames, "ATSOptionsFrame")
+
+    win:SetScript("OnShow", function()
+        if ATS and ATS.menu and ATS.menu:IsShown() then ATS.menu:Hide() end
+    end)
+
+    -- Make the window movable
+    win:EnableMouse(true)
+    win:SetMovable(true)
+    win:RegisterForDrag("LeftButton")
+    win:SetScript("OnDragStart", win.StartMoving)
+    win:SetScript("OnDragStop", win.StopMovingOrSizing)
+
+    -- Close button
+    local close = CreateFrame("Button", nil, win, "UIPanelCloseButton")
+    close:SetPoint("TOPRIGHT", 2, 2)
+
+    -- Parent the existing options panel into our window for standalone display
+    panel:SetParent(win)
+    panel:ClearAllPoints()
+    panel:SetPoint("TOPLEFT", win, "TOPLEFT", 8, -8)
+    panel:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -8, 96)
+    panel:Hide()
+
+    -- Expose a toggle for the minimap button
+    self.optionsWindow = win
+    self.optionsPanel = panel
 end
