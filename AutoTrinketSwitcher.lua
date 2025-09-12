@@ -401,6 +401,19 @@ function ATS:UpdateButtons()
     if self.menu and self.menu:IsShown() then
         self:UpdateMenuCooldowns()
     end
+    -- Keep minimap icon in sync with slot 13
+    if self.UpdateMinimapIcon then self:UpdateMinimapIcon() end
+end
+
+-- Update minimap button icon to the currently equipped trinket in slot 13
+function ATS:UpdateMinimapIcon()
+    if not self.minimapButton or not self.minimapButton.icon then return end
+    local tex = GetInventoryItemTexture("player", 13) or 134430
+    self.minimapButton.icon:SetTexture(tex)
+    -- Slight crop to better fit the circular border
+    if self.minimapButton.icon.SetTexCoord then
+        self.minimapButton.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    end
 end
 
 -- Create the two slot buttons
@@ -518,25 +531,29 @@ end
 -- Create a minimap button for quick toggles
 function ATS:CreateMinimapButton()
     local btn = CreateFrame("Button", "ATS_MinimapButton", Minimap)
-    btn:SetSize(40, 40)
-    btn:SetFrameStrata("MEDIUM")
-    btn:SetPoint("TOPLEFT")
+    -- Use standard minimap button dimensions so the tracking ring fits correctly
+    btn:SetSize(32, 32)
+    btn:SetFrameStrata("HIGH")
+    btn:ClearAllPoints()
+    btn:SetPoint("CENTER", Minimap, "CENTER", 0, 0)
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
-    btn.icon = btn:CreateTexture(nil, "BACKGROUND")
-    -- Use a clear trinket-like icon that is always available
-    local faction = UnitFactionGroup and UnitFactionGroup("player")
-    if faction == "Alliance" then
-        btn.icon:SetTexture("Interface/TargetingFrame/UI-PVP-ALLIANCE")
-    elseif faction == "Horde" then
-        btn.icon:SetTexture("Interface/TargetingFrame/UI-PVP-Horde")
-    else
-        btn.icon:SetTexture(134430)
-    end
-    btn.icon:ClearAllPoints()
+    -- Icon + circular border similar to Blizzard tracking button
+    btn.icon = btn:CreateTexture(nil, "ARTWORK")
     btn.icon:SetPoint("CENTER", 0, 0)
-    btn.icon:SetSize(34, 34)
-    btn.icon:SetTexCoord(0.04, 0.96, 0.04, 0.96)
+    btn.icon:SetSize(20, 20)
+    btn.icon:SetTexture(134430)
+    btn.icon:SetTexCoord(0.1, 0.9, 0.1, 0.9)
+
+    btn.border = btn:CreateTexture(nil, "OVERLAY")
+    btn.border:SetTexture("Interface/Minimap/MiniMap-TrackingBorder")
+    -- Match Blizzard/DBIcon style: 54x54 ring anchored to button's top-left
+    btn.border:SetSize(54, 54)
+    btn.border:ClearAllPoints()
+    btn.border:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+
+    -- Initialize icon from current slot 13
+    self:UpdateMinimapIcon()
 
     btn:SetHighlightTexture("Interface/Minimap/UI-Minimap-ZoomButton-Highlight")
 
@@ -572,8 +589,7 @@ function ATS:CreateMinimapButton()
 
     btn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        local icon = "|TInterface/PaperDoll/UI-PaperDoll-Slot-Trinket:16:16|t"
-        GameTooltip:SetText(icon .. " AutoTrinketSwitcher")
+        GameTooltip:SetText("AutoTrinketSwitcher")
         local WHITE = "FFFFFFFF"
         local GOLD  = "FFFFD100"
         local function line(label, text)
@@ -614,6 +630,19 @@ function ATS:PLAYER_LOGIN()
     end)
     -- Initialize mount state
     if self.UpdateMountState then self:UpdateMountState() end
+
+    -- Slash command: /ats and /ats help show quick usage help
+    SLASH_AUTOTRINKETSWITCHER1 = "/ats"
+    SlashCmdList["AUTOTRINKETSWITCHER"] = function(_)
+        local function say(text)
+            DEFAULT_CHAT_FRAME:AddMessage("|cffFFD100AutoTrinketSwitcher:|r " .. text)
+        end
+        say("- Hover: Shows menu; also shows tooltip if enabled")
+        say("- Left-click: Use Trinket")
+        say("- Shift+ Left/Right-Click: Add/Remove trinket to the priority queue (Left = slot 13, Right = slot 14)")
+        say("- Ctrl + Left/Right-Click: Equip AND toggle manual mode (Left = slot 13, Right = slot 14)")
+        say("- Right-Click: Toggle pinned tooltip when tooltip mode is Right-Click")
+    end
 end
 
 ATS:RegisterEvent("PLAYER_LOGIN")

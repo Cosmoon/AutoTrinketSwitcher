@@ -61,7 +61,7 @@ function ATS:ShowMenu(anchor)
     local trinkets = ScanTrinkets()
     local wrap = math.min(30, math.max(1, AutoTrinketSwitcherCharDB.wrapAt))
     local dir = AutoTrinketSwitcherCharDB.menuPosition
-    local isVertical = dir == "LEFT" or dir == "RIGHT"
+    local isVertical = (AutoTrinketSwitcherCharDB.wrapDirection == "VERTICAL")
     local size, spacing = 32, 4
     local cols, rows = 0, 0
 
@@ -101,7 +101,17 @@ function ATS:ShowMenu(anchor)
 
         btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         btn:SetScript("OnClick", function(self, mouse)
-            if IsShiftKeyDown() then
+            if IsControlKeyDown() then
+                local slot = mouse == "LeftButton" and 13 or 14
+                if C_Item and C_Item.EquipItemByName then
+                    C_Item.EquipItemByName(self.itemID, slot)
+                else
+                    EquipItemByName(self.itemID, slot)
+                end
+                AutoTrinketSwitcherCharDB.manual = AutoTrinketSwitcherCharDB.manual or { [13]=false, [14]=false }
+                AutoTrinketSwitcherCharDB.manual[slot] = not AutoTrinketSwitcherCharDB.manual[slot]
+                ATS:UpdateButtons()
+            elseif IsShiftKeyDown() then
                 local slot = mouse == "LeftButton" and 13 or 14
                 ATS:ToggleTrinket(slot, self.itemID)
                 ATS:RefreshMenuNumbers()
@@ -114,16 +124,23 @@ function ATS:ShowMenu(anchor)
                 end
                 ATS:UpdateButtons()
             elseif mouse == "RightButton" and AutoTrinketSwitcherCharDB.tooltipMode == "RIGHTCLICK" then
-                ATS:ShowItemTooltip(self, self.itemID)
+                ATS.tooltipPinned = not ATS.tooltipPinned
+                if ATS.tooltipPinned then
+                    ATS:ShowItemTooltip(self, self.itemID)
+                else
+                    GameTooltip:Hide()
+                end
             end
         end)
 
         btn:SetScript("OnEnter", function(self)
-            if AutoTrinketSwitcherCharDB.tooltipMode == "HOVER" then
+            if AutoTrinketSwitcherCharDB.tooltipMode == "HOVER" or ATS.tooltipPinned then
                 ATS:ShowItemTooltip(self, self.itemID)
             end
         end)
-        btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        btn:SetScript("OnLeave", function()
+            if not ATS.tooltipPinned then GameTooltip:Hide() end
+        end)
 
         self.menu.icons[i] = btn
         btn:Show()
@@ -133,22 +150,24 @@ function ATS:ShowMenu(anchor)
     local height = 8 + rows * (size + spacing) - spacing
     self.menu:SetSize(width, height)
 
-    self.menu.anchor = anchor
+    -- Always anchor to the buttons frame so the menu stays outside on the chosen side
+    self.menu.anchor = self.buttonFrame or anchor
     self.menu:ClearAllPoints()
     if dir == "TOP" then
-        self.menu:SetPoint("BOTTOM", anchor, "TOP", 0, 4)
+        self.menu:SetPoint("BOTTOM", self.menu.anchor, "TOP", 0, 4)
     elseif dir == "LEFT" then
-        self.menu:SetPoint("RIGHT", anchor, "LEFT", -4, 0)
+        self.menu:SetPoint("RIGHT", self.menu.anchor, "LEFT", -4, 0)
     elseif dir == "RIGHT" then
-        self.menu:SetPoint("LEFT", anchor, "RIGHT", 4, 0)
+        self.menu:SetPoint("LEFT", self.menu.anchor, "RIGHT", 4, 0)
     else
-        self.menu:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
+        self.menu:SetPoint("TOP", self.menu.anchor, "BOTTOM", 0, -4)
     end
 
     self:RefreshMenuNumbers()
     self:UpdateMenuCooldowns()
     self.menu:Show()
     self:ApplyColorSettings()
+    self:ApplyMenuQueueFont()
     ATS:UpdateCooldownFont()
 end
 

@@ -292,7 +292,7 @@ function ATS:CreateOptions()
             menuBox:SetHeight(menuBox:GetTop() - mBottom + 40)
 
             local last = c4 or c3
-            colorBox:SetHeight(colorBox:GetTop() - last:GetBottom() + 40)
+            colorBox:SetHeight(colorBox:GetTop() - last:GetBottom() + 24)
         end
 
         -- Run layout now and once next frame to handle initial sizing
@@ -309,7 +309,7 @@ function ATS:CreateOptions()
     local win = CreateFrame("Frame", "ATSOptionsFrame", UIParent, template)
     win:SetFrameStrata("DIALOG")
     win:SetToplevel(true)
-    win:SetSize(700, 560)
+    win:SetSize(820, 640)
     win:SetPoint("CENTER")
     if win.SetBackdrop then
         win:SetBackdrop({
@@ -342,7 +342,7 @@ function ATS:CreateOptions()
     panel:SetParent(win)
     panel:ClearAllPoints()
     panel:SetPoint("TOPLEFT", win, "TOPLEFT", 8, -8)
-    panel:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -8, 96)
+    panel:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -8, 8)
     panel:Hide()
 
     -- Expose a toggle for the minimap button
