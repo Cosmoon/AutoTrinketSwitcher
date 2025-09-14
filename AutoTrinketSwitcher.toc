@@ -4,6 +4,7 @@
 ## Author: Cosmoon
 ## Version: 1.0
 ## SavedVariablesPerCharacter: AutoTrinketSwitcherCharDB
+## IconTexture: Interface\AddOns\AutoTrinketSwitcher\Media\AutoTrinketSwitche_Logo.blp
 AutoTrinketSwitcher.lua
 Menu.lua
 Options.lua

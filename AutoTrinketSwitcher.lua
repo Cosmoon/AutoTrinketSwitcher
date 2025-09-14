@@ -1,4 +1,6 @@
 local ATS = CreateFrame("Frame", "AutoTrinketSwitcherFrame")
+-- Addon logo used for the minimap button
+local ATS_MINIMAP_LOGO = "Interface\\AddOns\\AutoTrinketSwitcher\\Media\\AutoTrinketSwitche_Logo.blp"
 
 -- Ensure saved variables exist after they are loaded
 local function EnsureDB()
@@ -28,6 +30,7 @@ local function EnsureDB()
     db.colors.slot14 = db.colors.slot14 or { r = 1, g = 0.82, b = 0 }
     db.colors.glow   = db.colors.glow   or { r = 1, g = 1, b = 0 }
     db.colors.manualBadge = db.colors.manualBadge or { r = 1, g = 1, b = 1 }
+
 
     db.buttonPos = db.buttonPos or { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 }
     db.manual = db.manual or { [13] = false, [14] = false }
@@ -462,8 +465,8 @@ end
 -- Update minimap button icon to the currently equipped trinket in slot 13
 function ATS:UpdateMinimapIcon()
     if not self.minimapButton or not self.minimapButton.icon then return end
-    local tex = GetInventoryItemTexture("player", 13) or 134430
-    self.minimapButton.icon:SetTexture(tex)
+    -- Always use addon logo for the minimap button icon
+    self.minimapButton.icon:SetTexture(ATS_MINIMAP_LOGO)
     -- Slight crop to better fit the circular border
     if self.minimapButton.icon.SetTexCoord then
         self.minimapButton.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -598,7 +601,8 @@ function ATS:CreateMinimapButton()
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
     btn.icon:SetPoint("CENTER", 0, 0)
     btn.icon:SetSize(20, 20)
-    btn.icon:SetTexture(134430)
+    -- Use addon logo as the minimap icon
+    btn.icon:SetTexture(ATS_MINIMAP_LOGO)
     btn.icon:SetTexCoord(0.1, 0.9, 0.1, 0.9)
 
     btn.border = btn:CreateTexture(nil, "OVERLAY")
