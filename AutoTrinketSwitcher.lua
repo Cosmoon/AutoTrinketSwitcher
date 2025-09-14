@@ -19,6 +19,7 @@ local function EnsureDB()
     db.tooltipMode = db.tooltipMode or "HOVER"
     db.useDefaultTooltipAnchor = (db.useDefaultTooltipAnchor ~= false)
     db.tinyTooltips = db.tinyTooltips or false
+    db.cleanTooltips = db.cleanTooltips or false
     db.menuPosition = db.menuPosition or "BOTTOM"
     db.wrapAt = db.wrapAt or 10
 
@@ -32,20 +33,45 @@ local function EnsureDB()
     db.manual = db.manual or { [13] = false, [14] = false }
     db.queueNumberSize = db.queueNumberSize or 12
     db.wrapDirection = db.wrapDirection or "HORIZONTAL" -- or VERTICAL
+    db.altFullTooltips = db.altFullTooltips or false
 end
 
 -- Helper to position the tooltip at the game's default location (or legacy side-anchored)
+function ATS:GetTooltip()
+    if AutoTrinketSwitcherCharDB and AutoTrinketSwitcherCharDB.cleanTooltips then
+        if not self.cleanTooltip then
+            local template = "GameTooltipTemplate"
+            self.cleanTooltip = CreateFrame("GameTooltip", "ATS_CleanTooltip", UIParent, template)
+            -- Ensure context clears when this tooltip hides
+            if self.cleanTooltip.HookScript then
+                self.cleanTooltip:HookScript("OnHide", function()
+                    if not ATS.tooltipPinned then ATS.tooltipContext = nil end
+                end)
+            end
+        end
+        return self.cleanTooltip
+    end
+    return GameTooltip
+end
+
+function ATS:HideTooltip()
+    if self.cleanTooltip and self.cleanTooltip.Hide then self.cleanTooltip:Hide() end
+    if GameTooltip and GameTooltip.Hide then GameTooltip:Hide() end
+end
+
 local function SetTooltipOwner(frame)
+    local tip = ATS:GetTooltip()
     if AutoTrinketSwitcherCharDB.useDefaultTooltipAnchor then
-        GameTooltip:SetOwner(frame, "ANCHOR_NONE")
+        tip:SetOwner(frame, "ANCHOR_NONE")
         if GameTooltip_SetDefaultAnchor then
-            GameTooltip_SetDefaultAnchor(GameTooltip, frame)
+            GameTooltip_SetDefaultAnchor(tip, frame)
         else
-            GameTooltip:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -13, 64)
+            tip:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -13, 64)
         end
     else
-        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        tip:SetOwner(frame, "ANCHOR_RIGHT")
     end
+    return tip
 end
 
 -- Utility: get remaining cooldown for an itemID
@@ -199,33 +225,61 @@ end
 
 -- Display tooltip for an equipped slot
 function ATS:ShowTooltip(frame, slot)
-    if AutoTrinketSwitcherCharDB.tinyTooltips then
+    local tiny = AutoTrinketSwitcherCharDB.tinyTooltips
+    if AutoTrinketSwitcherCharDB.altFullTooltips and IsAltKeyDown() then
+        tiny = false
+    end
+    -- Remember current tooltip context for live modifier refresh
+    self.tooltipContext = { kind = "slot", frame = frame, slot = slot }
+    if tiny then
         local itemID = GetInventoryItemID("player", slot)
         if not itemID then return end
-        SetTooltipOwner(frame)
+        local tip = SetTooltipOwner(frame)
         local name = GetItemInfo(itemID)
-        if name then GameTooltip:SetText(name) end
+        if name then tip:SetText(name) end
         local _, desc = GetItemSpell(itemID)
-        if desc then GameTooltip:AddLine(desc, 1, 1, 1) end
-        GameTooltip:Show()
+        if desc then tip:AddLine(desc, 1, 1, 1) end
+        tip:Show()
     else
-        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
-        GameTooltip:SetInventoryItem("player", slot)
+        local tip = SetTooltipOwner(frame)
+        tip:SetInventoryItem("player", slot)
     end
 end
 
 -- Display tooltip for an itemID (used in the menu)
 function ATS:ShowItemTooltip(frame, itemID)
-    if AutoTrinketSwitcherCharDB.tinyTooltips then
-        SetTooltipOwner(frame)
+    local tiny = AutoTrinketSwitcherCharDB.tinyTooltips
+    if AutoTrinketSwitcherCharDB.altFullTooltips and IsAltKeyDown() then
+        tiny = false
+    end
+    -- Remember current tooltip context for live modifier refresh
+    self.tooltipContext = { kind = "item", frame = frame, itemID = itemID }
+    if tiny then
+        local tip = SetTooltipOwner(frame)
         local name = GetItemInfo(itemID)
-        if name then GameTooltip:SetText(name) end
+        if name then tip:SetText(name) end
         local _, desc = GetItemSpell(itemID)
-        if desc then GameTooltip:AddLine(desc, 1, 1, 1) end
-        GameTooltip:Show()
+        if desc then tip:AddLine(desc, 1, 1, 1) end
+        tip:Show()
     else
-        SetTooltipOwner(frame)
-        GameTooltip:SetItemByID(itemID)
+        local tip = SetTooltipOwner(frame)
+        tip:SetItemByID(itemID)
+    end
+end
+
+-- Re-render tooltip when modifiers change (e.g., ALT toggled)
+function ATS:RefreshTooltip()
+    if not self.tooltipContext then return end
+    local shown = (GameTooltip and GameTooltip.IsShown and GameTooltip:IsShown())
+    if not shown and self.cleanTooltip and self.cleanTooltip.IsShown then
+        shown = self.cleanTooltip:IsShown()
+    end
+    if not shown then return end
+    local ctx = self.tooltipContext
+    if ctx.kind == "slot" and ctx.frame and ctx.slot then
+        self:ShowTooltip(ctx.frame, ctx.slot)
+    elseif ctx.kind == "item" and ctx.frame and ctx.itemID then
+        self:ShowItemTooltip(ctx.frame, ctx.itemID)
     end
 end
 
@@ -501,7 +555,8 @@ function ATS:CreateButtons()
                 if ATS.tooltipPinned then
                     ATS:ShowTooltip(self, slot)
                 else
-                    GameTooltip:Hide()
+                    ATS:HideTooltip()
+                    ATS.tooltipContext = nil
                 end
             end
         end)
@@ -515,7 +570,8 @@ function ATS:CreateButtons()
         btn:SetScript("OnLeave", function()
             ATS:TryHideMenu()
             if not ATS.tooltipPinned then
-                GameTooltip:Hide()
+                ATS:HideTooltip()
+                ATS.tooltipContext = nil
             end
         end)
 
@@ -628,6 +684,12 @@ function ATS:PLAYER_LOGIN()
             self:UpdateButtons()
         end
     end)
+    -- Clear tooltip context if tooltip is hidden by any external cause
+    if GameTooltip and GameTooltip.HookScript then
+        GameTooltip:HookScript("OnHide", function()
+            if not ATS.tooltipPinned then ATS.tooltipContext = nil end
+        end)
+    end
     -- Initialize mount state
     if self.UpdateMountState then self:UpdateMountState() end
 
@@ -653,6 +715,7 @@ ATS:RegisterEvent("PLAYER_ENTERING_WORLD")
 ATS:RegisterEvent("ZONE_CHANGED")
 ATS:RegisterEvent("ZONE_CHANGED_INDOORS")
 ATS:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+ATS:RegisterEvent("MODIFIER_STATE_CHANGED")
 ATS:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_REGEN_ENABLED" then
         self:PerformCheck()
@@ -697,4 +760,10 @@ function ATS:UpdateMountState()
             self.resumeGuardUntil = GetTime() + 1.5
         end
     end
+end
+
+-- Respond to ALT (or any modifier) changes to live-refresh tooltip details
+function ATS:MODIFIER_STATE_CHANGED()
+    if not AutoTrinketSwitcherCharDB or not AutoTrinketSwitcherCharDB.altFullTooltips then return end
+    self:RefreshTooltip()
 end

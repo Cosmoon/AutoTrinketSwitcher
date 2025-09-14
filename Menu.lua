@@ -128,7 +128,8 @@ function ATS:ShowMenu(anchor)
                 if ATS.tooltipPinned then
                     ATS:ShowItemTooltip(self, self.itemID)
                 else
-                    GameTooltip:Hide()
+                    ATS:HideTooltip()
+                    ATS.tooltipContext = nil
                 end
             end
         end)
@@ -139,7 +140,10 @@ function ATS:ShowMenu(anchor)
             end
         end)
         btn:SetScript("OnLeave", function()
-            if not ATS.tooltipPinned then GameTooltip:Hide() end
+            if not ATS.tooltipPinned then
+                ATS:HideTooltip()
+                ATS.tooltipContext = nil
+            end
         end)
 
         self.menu.icons[i] = btn

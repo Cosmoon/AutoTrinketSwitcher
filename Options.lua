@@ -44,6 +44,10 @@ function ATS:CreateOptions()
             if key == "useDefaultTooltipAnchor" then -- nothing immediate besides tooltip placement
                 -- no-op; placement applied next time tooltips show
             end
+            if key == "tinyTooltips" or key == "altFullTooltips" or key == "cleanTooltips" or key == "useDefaultTooltipAnchor" then
+                if ATS.HideTooltip then ATS:HideTooltip() end
+                if ATS.RefreshTooltip then ATS:RefreshTooltip() end
+            end
         end)
         return cb
     end
@@ -60,6 +64,8 @@ function ATS:CreateOptions()
     -- New: default tooltip anchoring toggle
     local g5 = CreateCheck(generalBox, "Use default tooltip position", "useDefaultTooltipAnchor", gHeader)
     local g6 = CreateCheck(generalBox, "Use tiny tooltips", "tinyTooltips", gHeader)
+    local g7 = CreateCheck(generalBox, "Hold ALT for full tooltips", "altFullTooltips", gHeader)
+    local g8 = CreateCheck(generalBox, "Block other addon info in tooltips", "cleanTooltips", gHeader)
 
     -- Reposition into two columns
     local function PlaceCheck(cb, col, row)
@@ -73,6 +79,8 @@ function ATS:CreateOptions()
     PlaceCheck(g4, 2, 1)
     PlaceCheck(g5, 2, 2)
     PlaceCheck(g6, 2, 3)
+    PlaceCheck(g7, 2, 4)
+    PlaceCheck(g8, 2, 5)
 
     local tooltipLabel = generalBox:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     tooltipLabel:SetPoint("TOPLEFT", gHeader, "BOTTOMLEFT", gColLeftX, gRowY - 3 * 28 - 16)
@@ -258,14 +266,14 @@ function ATS:CreateOptions()
     -- Size boxes when shown to avoid anchoring parents to children
     panel:SetScript("OnShow", function()
         local function layout()
-            -- Compute bottom of General box by taking the lowest control (tooltip drop or last checkbox)
-            local g6b = g6 and g6:GetBottom() or nil
+            -- Compute bottom of General box: lowest of tooltip dropdown or last checkbox
+            local lastCheckBottom = (g8 and g8:GetBottom()) or (g7 and g7:GetBottom()) or (g6 and g6:GetBottom()) or nil
             local tdb = tooltipDrop and tooltipDrop:GetBottom() or nil
             local gBottom
-            if g6b and tdb then
-                gBottom = math.min(g6b, tdb)
+            if lastCheckBottom and tdb then
+                gBottom = math.min(lastCheckBottom, tdb)
             else
-                gBottom = g6b or tdb or (gHeader:GetBottom() - 60)
+                gBottom = lastCheckBottom or tdb or (gHeader:GetBottom() - 60)
             end
             generalBox:SetHeight(generalBox:GetTop() - gBottom + 16)
 

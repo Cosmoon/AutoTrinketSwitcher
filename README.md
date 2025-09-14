@@ -45,6 +45,8 @@ Slash commands
 
 Notes & tips
 - Auto switching only happens out of combat; the glow hint is shown in combat when a swap will be possible soon.
-- Right‑click tooltip pin works both on the slot buttons and in the menu when tooltip mode is set to Right‑Click.
+- Right-click tooltip pin works both on the slot buttons and in the menu when tooltip mode is set to Right-Click.
 - The menu can be configured to appear only out of combat.
 - A short settle guard after dismount avoids gear oscillation when auto switching resumes.
+- Optional: When using tiny tooltips, enable "Hold ALT for full tooltips" in General settings to see full item tooltips while holding ALT on hover (slots and menu).
+ - Optional: Enable "Block other addon info in tooltips" to show trinket tooltips using an isolated tooltip that most addons won't modify.
