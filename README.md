@@ -2,8 +2,6 @@
 AutoTrinketSwitcher
 ====================
 
-Smart Classic Era trinket management with an in‑game menu, priority queues, manual overrides, and a compact options window.
-
 What it does
 - Auto switch: Out of combat, equips the highest‑priority ready trinket for each slot.
 - Preemptive return: When your top priority becomes “switch‑ready” (≤30s), it preempts lower priority.
@@ -21,10 +19,10 @@ In‑game usage
   - Ctrl+Right‑Click: Toggle Auto Switching
 - Trinket buttons (two buttons for slot 13 and 14):
   - Hover: Shows menu; also shows tooltip if enabled
+  - Alt + Hover: Shows full tooltip
 - Trinket menu (shows all your trinkets, bag + equipped):
-  - Shift‑Click: Add/Remove trinket to the priority queue of the clicked slot (Left = 13, Right = 14)
-  - Ctrl‑Left‑Click: Equip in slot 13 AND toggle manual mode for slot 13
-  - Ctrl‑Right‑Click: Equip in slot 14 AND toggle manual mode for slot 14
+  - Shift‑Click: Add/Remove trinket to the priority queue of the clicked slot (Left = slot 13, Right = slot 14)
+  - Ctrl‑Click: Equip in slot AND toggle manual mode for slot (Left = slot 13, Right = slot 14)
   - Right‑Click: Toggle pinned tooltip when tooltip mode is Right‑Click
 - Manual mode “M” badge:
   - Shown on a slot when that slot is manual, or when auto switching is OFF.
@@ -37,11 +35,9 @@ Priority rules (summary)
 - Usable items near ready (≤30s) won’t be swapped off unless the incoming trinket is higher priority for that slot.
 
 Slash commands
+- /ats: Show quick help
 - /ats help: Show quick help
-- /ats options: Open/Close the options window
-- /ats auto: Toggle auto switching
-- /ats lock: Lock/Unlock the trinket buttons
-- /ats show | /ats hide: Show/Hide the trinket buttons window
+
 
 Notes & tips
 - Auto switching only happens out of combat; the glow hint is shown in combat when a swap will be possible soon.
