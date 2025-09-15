@@ -39,6 +39,65 @@ local function EnsureDB()
     db.altFullTooltips = db.altFullTooltips or false
 end
 
+-- Build a stable signature of the player's current talents (Classic-style trees)
+function ATS:ComputeTalentSignature()
+    local _, classTag = UnitClass and UnitClass("player")
+    classTag = classTag or "UNKNOWN"
+
+    local tabs = {}
+    local group = (type(GetActiveTalentGroup) == "function" and GetActiveTalentGroup()) or 1
+    if GetNumTalentTabs and GetTalentInfo and GetNumTalents then
+        local numTabs = GetNumTalentTabs()
+        for t = 1, numTabs do
+            local points = 0
+            local num = GetNumTalents(t)
+            for i = 1, num do
+                local _, _, _, _, rank = GetTalentInfo(t, i)
+                points = points + (tonumber(rank) or 0)
+            end
+            table.insert(tabs, tostring(points))
+        end
+    end
+
+    if #tabs == 0 then
+        return string.format("%s:G%s:NO_TALENTS", classTag, tostring(group))
+    else
+        return string.format("%s:G%s:%s", classTag, tostring(group), table.concat(tabs, "-"))
+    end
+end
+
+-- Ensure per-talent profiles exist and activate the one matching current talents
+function ATS:SyncActiveTalentProfile(opts)
+    EnsureDB()
+    local db = AutoTrinketSwitcherCharDB
+
+    db.talentProfiles = db.talentProfiles or nil -- lazily create on first sync
+
+    local signature = self:ComputeTalentSignature()
+    local firstSetup = (db.talentProfiles == nil)
+
+    if firstSetup then
+        -- Migrate existing queues to a profile for the current talents
+        db.talentProfiles = {}
+        db.talentProfiles[signature] = {
+            queues = db.queues or { [13] = {}, [14] = {} },
+        }
+        db.activeTalentSignature = signature
+        db.queues = db.talentProfiles[signature].queues
+        return false -- no visible switch; just initialization
+    end
+
+    db.talentProfiles[signature] = db.talentProfiles[signature] or { queues = { [13] = {}, [14] = {} } }
+
+    local switched = (db.activeTalentSignature ~= signature)
+    db.activeTalentSignature = signature
+    -- Point live queues to this profile's queues
+    db.queues = db.talentProfiles[signature].queues
+
+    if opts and opts.silent then return false end
+    return switched
+end
+
 -- Helper to position the tooltip at the game's default location (or legacy side-anchored)
 function ATS:GetTooltip()
     if AutoTrinketSwitcherCharDB and AutoTrinketSwitcherCharDB.cleanTooltips then
@@ -668,6 +727,8 @@ end
 
 function ATS:PLAYER_LOGIN()
     EnsureDB()
+    -- Initialize or attach to the talent-based profile for the current build
+    self:SyncActiveTalentProfile({ silent = true })
     self:CreateOptions()
     self:CreateButtons()
     self:CreateMinimapButton()
@@ -720,6 +781,10 @@ ATS:RegisterEvent("ZONE_CHANGED")
 ATS:RegisterEvent("ZONE_CHANGED_INDOORS")
 ATS:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 ATS:RegisterEvent("MODIFIER_STATE_CHANGED")
+-- Talent-change events across Classic/Wrath variants
+ATS:RegisterEvent("CHARACTER_POINTS_CHANGED")
+ATS:RegisterEvent("PLAYER_TALENT_UPDATE")
+ATS:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
 ATS:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_REGEN_ENABLED" then
         self:PerformCheck()
@@ -730,10 +795,44 @@ ATS:SetScript("OnEvent", function(self, event)
         self:UpdateMountState()
     elseif event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
         self:UpdateMountState()
+    elseif event == "CHARACTER_POINTS_CHANGED" then
+        -- Debounce rapid talent point updates while respecing
+        self._talentChangePing = GetTime()
+        if C_Timer and C_Timer.After then
+            C_Timer.After(1.0, function()
+                if not ATS._talentChangePing then return end
+                if GetTime() - ATS._talentChangePing >= 0.9 then
+                    ATS._talentChangePing = nil
+                    ATS:OnTalentConfigurationChanged()
+                end
+            end)
+        else
+            -- Fallback without timers
+            ATS:OnTalentConfigurationChanged()
+        end
+    elseif event == "PLAYER_TALENT_UPDATE" or event == "ACTIVE_TALENT_GROUP_CHANGED" then
+        self:OnTalentConfigurationChanged()
     elseif self[event] then
         self[event](self)
     end
 end)
+
+-- Apply profile switching and notify the player
+function ATS:OnTalentConfigurationChanged()
+    local switched = self:SyncActiveTalentProfile()
+    if switched then
+        local msg = "Switched trinket queues to current talents"
+        if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffFFD100AutoTrinketSwitcher:|r " .. msg)
+        end
+        -- Refresh UI elements
+        self:UpdateButtons()
+        if self.menu and self.menu:IsShown() then
+            self:RefreshMenuNumbers()
+            self:UpdateMenuCooldowns()
+        end
+    end
+end
 
 -- Mount handling: auto-disable autoSwitch when mounting; restore previous state on dismount
 function ATS:UpdateMountState()

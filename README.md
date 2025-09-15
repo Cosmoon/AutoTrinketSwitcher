@@ -44,5 +44,11 @@ Notes & tips
 - Right-click tooltip pin works both on the slot buttons and in the menu when tooltip mode is set to Right-Click.
 - The menu can be configured to appear only out of combat.
 - A short settle guard after dismount avoids gear oscillation when auto switching resumes.
-- Optional: When using tiny tooltips, enable "Hold ALT for full tooltips" in General settings to see full item tooltips while holding ALT on hover (slots and menu).
+ - Optional: When using tiny tooltips, enable "Hold ALT for full tooltips" in General settings to see full item tooltips while holding ALT on hover (slots and menu).
  - Optional: Enable "Block other addon info in tooltips" to show trinket tooltips using an isolated tooltip that most addons won't modify.
+
+Talent-based queues
+- Tracks separate trinket queues per talent build (Classic trees).
+- When you change talents, ATS automatically switches to that build’s dedicated pair of queues (slot 13 and 14).
+- On first run, your current queues are migrated to the current build; new builds start with empty queues.
+- Per-character, saved automatically; no extra setup required.
