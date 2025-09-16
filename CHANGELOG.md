@@ -3,15 +3,22 @@ Changelog
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
+1.4 - 2025-09-19
+- Added a ready glow that reuses the mounted border whenever an equipped on-use trinket comes off cooldown.
+- Added a "Trinket ready glow" toggle and color picker so the effect can be customized or disabled.
+- Mount override persistence fixes: the red mounted indicator now survives login/reload and reactivates while mounted.
+- Trinket menus now snap above the buttons when placed near the top half of the screen and below when placed near the bottom.
+- General polish and small bug fixes around tooltip/menu refresh and cooldown handling while mounted.
+
 1.3 - 2025-09-16
 - Added talent-based profiles: separate trinket queues per talent build and automatic profile switching on talent change.
-- Added menu sorting modes: Queued first (13-only → 14-only → both → others), Name, Item level.
+- Added menu sorting modes: Queued first (13-only -> 14-only -> both -> others), Name, Item level.
 - Menu visuals: queued items now glow with slot colors; removed candidate-only highlight.
 - Missing items: show grayed-out in menu; automatically prune missing from queues on login and after talent switch.
-- Ctrl-click behavior: toggles only the clicked slot. Auto → Manual equips the clicked trinket; Manual → Auto resumes queue logic immediately.
+- Ctrl-click behavior: toggles only the clicked slot. Auto -> Manual equips the clicked trinket; Manual -> Auto resumes queue logic immediately.
 - Global toggles unified (options + minimap): ON sets both slots to auto; OFF sets both to manual. Options checkbox reflects derived state (ON if at least one slot is auto).
 - Mounted UX: red glow around both trinket buttons while mounted; per-slot manual badges now reflect only true per-slot state.
-- Options layout: moved “Sort by” to second line; renamed to “Queue font size”; increased third-line spacing; Colour settings now 4 columns.
+- Options layout: moved "Sort by" to second line; renamed to "Queue font size"; increased third-line spacing; Colour settings now four columns.
 - Menu sizing: frame width/height adapts to wrapping like before.
 - Slash commands: added `/ats clear 13`, `/ats clear 14`, `/ats clear both`; help output reformatted.
 - Internal cleanup: split tooltip and talent-profile logic into `Tooltips.lua` and `Profiles.lua`.
@@ -20,7 +27,7 @@ All notable changes to AutoTrinketSwitcher are documented here.
 - Initial release.
 - Out-of-combat automatic trinket switching per-slot based on queue priority.
 - Cross-slot coordination when both want the same item.
-- Respect usable trinkets near ready, passive trinkets don’t block swaps.
+- Respect usable trinkets near ready, passive trinkets don't block swaps.
 - Glow hint in combat when a swap will be possible soon.
 - Mount handling: temporarily disable auto switching when mounted and restore after dismount (with settle guard).
 - Trinket menu with queue management and cooldown overlays.
