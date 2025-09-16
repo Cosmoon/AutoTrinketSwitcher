@@ -873,4 +873,3 @@ function ATS:PruneMissingFromQueues()
         self:RefreshMenuNumbers()
     end
 end
-
