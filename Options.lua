@@ -36,11 +36,14 @@ function ATS:CreateOptions()
         cb:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -8)
         cb:SetChecked(db[key])
         cb:SetScript("OnClick", function(self)
+            if key == "autoSwitch" and ATS and ATS.SetGlobalAutoSwitch then
+                ATS:SetGlobalAutoSwitch(self:GetChecked())
+                return
+            end
             db[key] = self:GetChecked()
             if key == "showCooldownNumbers" then ATS:UpdateButtons() end
             if key == "largeNumbers" then ATS:UpdateCooldownFont() end
             if key == "lockWindows" then ATS:UpdateLockState() end
-            if key == "autoSwitch" then ATS:UpdateButtons() end
             if key == "useDefaultTooltipAnchor" then -- nothing immediate besides tooltip placement
                 -- no-op; placement applied next time tooltips show
             end
@@ -113,13 +116,39 @@ function ATS:CreateOptions()
     menuOOC:ClearAllPoints()
     menuOOC:SetPoint("TOPLEFT", mHeader, "BOTTOMLEFT", 16, -8)
 
-    -- Second line (more space): position + queue number size
+    -- Sorting dropdown (second line, next to position)
+    local sortLabel = menuBox:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    sortLabel:SetText("Sort by")
+    local sortDrop = CreateFrame("Frame", "ATSSortDropdown", menuBox, "UIDropDownMenuTemplate")
+    local sortModes = { QUEUED_FIRST = "Queued first", ALPHA = "Name", ILEVEL = "Item level" }
+    UIDropDownMenu_SetWidth(sortDrop, 130)
+    UIDropDownMenu_Initialize(sortDrop, function(self, level)
+        for value, text in pairs(sortModes) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text, info.value = text, value
+            info.func = function()
+                db.menuSortMode = value
+                UIDropDownMenu_SetSelectedValue(sortDrop, value)
+                if ATS.menu and ATS.menu:IsShown() and ATS.menu.anchor then
+                    ATS:ShowMenu(ATS.menu.anchor)
+                end
+            end
+            info.checked = db.menuSortMode == value
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+    UIDropDownMenu_SetSelectedValue(sortDrop, db.menuSortMode)
+
+    -- Second line (more space): position + sort by
     local posLabel = menuBox:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     posLabel:SetPoint("TOPLEFT", mHeader, "BOTTOMLEFT", 16, -50)
     posLabel:SetText("Show menu on")
 
     local drop = CreateFrame("Frame", "ATSMenuPosDropdown", menuBox, "UIDropDownMenuTemplate")
     drop:SetPoint("LEFT", posLabel, "RIGHT", -10, -4)
+    -- Place sort controls to the right of position dropdown
+    sortLabel:ClearAllPoints(); sortLabel:SetPoint("LEFT", drop, "RIGHT", 24, 0)
+    sortDrop:ClearAllPoints(); sortDrop:SetPoint("LEFT", sortLabel, "RIGHT", -10, -4)
     local positions = {TOP="Top", BOTTOM="Bottom", LEFT="Left", RIGHT="Right"}
     UIDropDownMenu_SetWidth(drop, 100)
     UIDropDownMenu_Initialize(drop, function(self, level)
@@ -160,13 +189,33 @@ function ATS:CreateOptions()
         end
     end)
 
-    -- Queue number font size (second line, next to position)
+    -- Wrap direction toggle button (third line, near Wrap at)
+    local wrapDirBtn = CreateFrame("Button", "ATSWrapDirButton", menuBox, "UIPanelButtonTemplate")
+    local function UpdateWrapDirButtonText()
+        if db.wrapDirection == "HORIZONTAL" then
+            wrapDirBtn:SetText("Vertical")
+        else
+            wrapDirBtn:SetText("Horizontal")
+        end
+    end
+    UpdateWrapDirButtonText()
+    wrapDirBtn:SetPoint("LEFT", wrapSlider, "RIGHT", 60, 0)
+    wrapDirBtn:SetWidth(100)
+    wrapDirBtn:SetScript("OnClick", function()
+        db.wrapDirection = (db.wrapDirection == "HORIZONTAL") and "VERTICAL" or "HORIZONTAL"
+        UpdateWrapDirButtonText()
+        if ATS.menu and ATS.menu:IsShown() and ATS.menu.anchor then
+            ATS:ShowMenu(ATS.menu.anchor)
+        end
+    end)
+
+    -- Queue font size (third line, next to Wrap At)
     local qLabel = menuBox:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    qLabel:SetPoint("LEFT", drop, "RIGHT", 24, 0)
-    qLabel:SetText("Queue number size")
+    qLabel:SetPoint("LEFT", wrapDirBtn, "RIGHT", 40, 0)
+    qLabel:SetText("Queue font size")
 
     local qSlider = CreateFrame("Slider", "ATSQueueNumSizeSlider", menuBox, "OptionsSliderTemplate")
-    qSlider:SetPoint("LEFT", qLabel, "RIGHT", 8, 0)
+    qSlider:SetPoint("LEFT", qLabel, "RIGHT", 12, 0)
     qSlider:SetMinMaxValues(8, 24)
     qSlider:SetValueStep(1)
     qSlider:SetObeyStepOnDrag(true)
@@ -180,26 +229,6 @@ function ATS:CreateOptions()
         db.queueNumberSize = value
         _G[self:GetName() .. "Text"]:SetText("Size: " .. value)
         ATS:ApplyMenuQueueFont()
-    end)
-
-    -- Wrap direction toggle button (next to Wrap at)
-    local wrapDirBtn = CreateFrame("Button", "ATSWrapDirButton", menuBox, "UIPanelButtonTemplate")
-    local function UpdateWrapDirButtonText()
-        if db.wrapDirection == "HORIZONTAL" then
-            wrapDirBtn:SetText("Vertical")
-        else
-            wrapDirBtn:SetText("Horizontal")
-        end
-    end
-    UpdateWrapDirButtonText()
-    wrapDirBtn:SetPoint("LEFT", wrapSlider, "RIGHT", 20, 0)
-    wrapDirBtn:SetWidth(100)
-    wrapDirBtn:SetScript("OnClick", function()
-        db.wrapDirection = (db.wrapDirection == "HORIZONTAL") and "VERTICAL" or "HORIZONTAL"
-        UpdateWrapDirButtonText()
-        if ATS.menu and ATS.menu:IsShown() and ATS.menu.anchor then
-            ATS:ShowMenu(ATS.menu.anchor)
-        end
     end)
 
     -- Colour settings box
@@ -253,9 +282,9 @@ function ATS:CreateOptions()
     c2:ClearAllPoints(); c2:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 180, -8)
     local c3 = CreateColorOption(colorBox, "Pending swap", "glow", cHeader, -8)
     c3:ClearAllPoints(); c3:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 344, -8)
-    -- Second row (starts new line), keep 3-column grid available for future
-    local c4 = CreateColorOption(colorBox, "Manual badge", "manualBadge", cHeader, -36)
-    c4:ClearAllPoints(); c4:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 16, -36)
+    -- Place fourth swatch on the same first row (4 columns)
+    local c4 = CreateColorOption(colorBox, "Manual badge", "manualBadge", cHeader, -8)
+    c4:ClearAllPoints(); c4:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 508, -8)
 
     -- Spacer below colour box to guarantee visual padding to the window edge
     local bottomSpacer = CreateFrame("Frame", nil, panel)
@@ -277,24 +306,13 @@ function ATS:CreateOptions()
             end
             generalBox:SetHeight(generalBox:GetTop() - gBottom + 16)
 
-            -- Place wrap direction button on third line (wrapSlider row),
-            -- horizontally aligned with the middle of the 'Queue number size' above.
-            if wrapDirBtn and wrapSlider and qSlider and menuBox and 
-               wrapSlider.GetTop and qSlider.GetLeft and menuBox.GetLeft then
-                local qCenterX = qSlider:GetLeft() + (qSlider:GetWidth() or 0) / 2
-                local wrapCenterY = (wrapSlider:GetTop() + wrapSlider:GetBottom()) / 2
-                local boxLeft = menuBox:GetLeft() or 0
-                local boxBottom = menuBox:GetBottom() or 0
-                if qCenterX and wrapCenterY and boxLeft and boxBottom then
-                    wrapDirBtn:ClearAllPoints()
-                    wrapDirBtn:SetPoint("CENTER", menuBox, "BOTTOMLEFT", qCenterX - boxLeft, wrapCenterY - boxBottom)
-                end
-            end
+            -- Wrap dir button uses its static anchor next to wrap slider.
 
             local mBottom = wrapSlider:GetBottom() or 0
             if drop:GetBottom() and drop:GetBottom() < mBottom then mBottom = drop:GetBottom() end
             if qSlider:GetBottom() and qSlider:GetBottom() < mBottom then mBottom = qSlider:GetBottom() end
             if menuOOC:GetBottom() and menuOOC:GetBottom() < mBottom then mBottom = menuOOC:GetBottom() end
+            if sortDrop:GetBottom() and sortDrop:GetBottom() < mBottom then mBottom = sortDrop:GetBottom() end
             if wrapDirBtn:GetBottom() and wrapDirBtn:GetBottom() < mBottom then mBottom = wrapDirBtn:GetBottom() end
             if mBottom == 0 then mBottom = (mHeader:GetBottom() - 60) end
             menuBox:SetHeight(menuBox:GetTop() - mBottom + 40)
@@ -356,4 +374,9 @@ function ATS:CreateOptions()
     -- Expose a toggle for the minimap button
     self.optionsWindow = win
     self.optionsPanel = panel
+    self.optionCheckboxes = self.optionCheckboxes or {}
+    self.optionCheckboxes.autoSwitch = g1
 end
+
+    if ATS and ATS.UpdateOptionsAutoCheckbox then ATS:UpdateOptionsAutoCheckbox() end
+

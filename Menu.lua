@@ -5,6 +5,7 @@ local function ScanTrinkets()
     local trinkets, seen = {}, {}
     local getSlots = C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots
     local getItemID = C_Container and C_Container.GetContainerItemID or GetContainerItemID
+    local present = {}
 
     for bag = 0, NUM_BAG_SLOTS do
         for slot = 1, getSlots(bag) do
@@ -14,6 +15,7 @@ local function ScanTrinkets()
                 if equipLoc == "INVTYPE_TRINKET" and not seen[itemID] then
                     table.insert(trinkets, itemID)
                     seen[itemID] = true
+                    present[itemID] = true
                 end
             end
         end
@@ -24,10 +26,25 @@ local function ScanTrinkets()
         if itemID and not seen[itemID] then
             table.insert(trinkets, itemID)
             seen[itemID] = true
+            present[itemID] = true
         end
     end
 
-    return trinkets
+    -- Include queued items even if not currently in bags, so the user can see/remove them
+    local db = AutoTrinketSwitcherCharDB
+    if db and db.queues then
+        for _, slot in ipairs({13,14}) do
+            for _, id in ipairs(db.queues[slot]) do
+                if not seen[id] then
+                    table.insert(trinkets, id)
+                    seen[id] = true
+                    present[id] = false
+                end
+            end
+        end
+    end
+
+    return trinkets, present
 end
 
 -- Create menu listing all available trinkets
@@ -58,7 +75,46 @@ function ATS:ShowMenu(anchor)
     end
     wipe(self.menu.icons)
 
-    local trinkets = ScanTrinkets()
+    local trinkets, present = ScanTrinkets()
+
+    -- Sorting
+    local mode = AutoTrinketSwitcherCharDB.menuSortMode or "QUEUED_FIRST"
+    local function alphaKey(id)
+        local name = GetItemInfo(id) or ""
+        return name:upper()
+    end
+    local function groupAndPos(id)
+        local p13 = ATS:GetQueuePosition(13, id)
+        local p14 = ATS:GetQueuePosition(14, id)
+        if p13 and not p14 then return 1, p13 end
+        if p14 and not p13 then return 2, p14 end
+        if p13 and p14 then return 3, math.min(p13, p14) end
+        return 4, math.huge
+    end
+    table.sort(trinkets, function(a, b)
+        if mode == "ALPHA" then
+            local na, nb = alphaKey(a), alphaKey(b)
+            if na == nb then return a < b end
+            return na < nb
+        elseif mode == "ILEVEL" then
+            local la = select(4, GetItemInfo(a)) or 0
+            local lb = select(4, GetItemInfo(b)) or 0
+            if la == lb then
+                local na, nb = alphaKey(a), alphaKey(b)
+                if na == nb then return a < b end
+                return na < nb
+            end
+            return la > lb
+        else -- QUEUED_FIRST: 13-only, 14-only, both, others
+            local ga, pa = groupAndPos(a)
+            local gb, pb = groupAndPos(b)
+            if ga ~= gb then return ga < gb end
+            if pa ~= pb then return pa < pb end
+            local na, nb = alphaKey(a), alphaKey(b)
+            if na == nb then return a < b end
+            return na < nb
+        end
+    end)
     local wrap = math.min(30, math.max(1, AutoTrinketSwitcherCharDB.wrapAt))
     local dir = AutoTrinketSwitcherCharDB.menuPosition
     local isVertical = (AutoTrinketSwitcherCharDB.wrapDirection == "VERTICAL")
@@ -86,6 +142,22 @@ function ATS:ShowMenu(anchor)
         btn.icon:SetTexture(GetItemIcon(itemID) or 134400)
         btn.itemID = itemID
 
+
+        -- Glows per slot membership in queues
+        btn.cand13Glow = btn.cand13Glow or btn:CreateTexture(nil, "OVERLAY")
+        btn.cand13Glow:SetTexture("Interface/Buttons/UI-ActionButton-Border")
+        btn.cand13Glow:SetBlendMode("ADD")
+        btn.cand13Glow:SetPoint("CENTER")
+        btn.cand13Glow:SetSize(54, 54)
+        btn.cand13Glow:Hide()
+
+        btn.cand14Glow = btn.cand14Glow or btn:CreateTexture(nil, "OVERLAY")
+        btn.cand14Glow:SetTexture("Interface/Buttons/UI-ActionButton-Border")
+        btn.cand14Glow:SetBlendMode("ADD")
+        btn.cand14Glow:SetPoint("CENTER")
+        btn.cand14Glow:SetSize(54, 54)
+        btn.cand14Glow:Hide()
+
         btn.cooldown = btn.cooldown or CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
         btn.cooldown:SetAllPoints(true)
         btn.cooldown:SetDrawEdge(false)
@@ -103,13 +175,24 @@ function ATS:ShowMenu(anchor)
         btn:SetScript("OnClick", function(self, mouse)
             if IsControlKeyDown() then
                 local slot = mouse == "LeftButton" and 13 or 14
-                if C_Item and C_Item.EquipItemByName then
-                    C_Item.EquipItemByName(self.itemID, slot)
-                else
-                    EquipItemByName(self.itemID, slot)
-                end
                 AutoTrinketSwitcherCharDB.manual = AutoTrinketSwitcherCharDB.manual or { [13]=false, [14]=false }
-                AutoTrinketSwitcherCharDB.manual[slot] = not AutoTrinketSwitcherCharDB.manual[slot]
+                local wasManual = AutoTrinketSwitcherCharDB.manual[slot] and true or false
+                local nowManual = not wasManual
+                AutoTrinketSwitcherCharDB.manual[slot] = nowManual
+
+                -- Equip clicked trinket only when switching from auto -> manual
+                if nowManual and not wasManual then
+                    if C_Item and C_Item.EquipItemByName then
+                        C_Item.EquipItemByName(self.itemID, slot)
+                    else
+                        EquipItemByName(self.itemID, slot)
+                    end
+                else
+                    -- Switching from manual -> auto: resume queue logic immediately if possible
+                    if ATS.PerformCheck then ATS:PerformCheck() end
+                end
+
+                if ATS.OnManualToggle then ATS:OnManualToggle() end
                 ATS:UpdateButtons()
             elseif IsShiftKeyDown() then
                 local slot = mouse == "LeftButton" and 13 or 14
@@ -150,6 +233,8 @@ function ATS:ShowMenu(anchor)
         btn:Show()
     end
 
+    -- No header quick actions; render grid from the top
+
     local width = 8 + cols * (size + spacing) - spacing
     local height = 8 + rows * (size + spacing) - spacing
     self.menu:SetSize(width, height)
@@ -168,6 +253,7 @@ function ATS:ShowMenu(anchor)
     end
 
     self:RefreshMenuNumbers()
+    if self.UpdateMenuDecorations then self:UpdateMenuDecorations(present) end
     self:UpdateMenuCooldowns()
     self.menu:Show()
     self:ApplyColorSettings()
@@ -182,6 +268,47 @@ function ATS:RefreshMenuNumbers()
         local p14 = self:GetQueuePosition(14, btn.itemID)
         if p13 then btn.pos13:SetText(p13) else btn.pos13:SetText("") end
         if p14 then btn.pos14:SetText(p14) else btn.pos14:SetText("") end
+    end
+end
+
+function ATS:UpdateMenuDecorations(presentLookup)
+    if not self.menu or not self.menu.icons then return end
+    presentLookup = presentLookup or {}
+    local c13 = AutoTrinketSwitcherCharDB.colors.slot13
+    local c14 = AutoTrinketSwitcherCharDB.colors.slot14
+    for _, btn in ipairs(self.menu.icons) do
+        local id = btn.itemID
+        -- Missing gray-out
+        local isPresent = presentLookup[id]
+        if btn.icon and btn.icon.SetDesaturated then
+            btn.icon:SetDesaturated(not isPresent)
+        end
+        if btn.icon then
+            if isPresent == false then
+                btn.icon:SetVertexColor(0.5,0.5,0.5)
+            else
+                btn.icon:SetVertexColor(1,1,1)
+            end
+        end
+        -- Queue membership glows (slot colors)
+        local in13 = ATS:GetQueuePosition(13, id) ~= nil
+        local in14 = ATS:GetQueuePosition(14, id) ~= nil
+        if btn.cand13Glow then
+            if in13 then
+                btn.cand13Glow:SetVertexColor(c13.r, c13.g, c13.b, 1)
+                btn.cand13Glow:Show()
+            else
+                btn.cand13Glow:Hide()
+            end
+        end
+        if btn.cand14Glow then
+            if in14 then
+                btn.cand14Glow:SetVertexColor(c14.r, c14.g, c14.b, 1)
+                btn.cand14Glow:Show()
+            else
+                btn.cand14Glow:Hide()
+            end
+        end
     end
 end
 

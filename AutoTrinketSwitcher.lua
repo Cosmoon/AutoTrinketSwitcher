@@ -37,104 +37,57 @@ local function EnsureDB()
     db.queueNumberSize = db.queueNumberSize or 12
     db.wrapDirection = db.wrapDirection or "HORIZONTAL" -- or VERTICAL
     db.altFullTooltips = db.altFullTooltips or false
+    db.menuSortMode = db.menuSortMode or "QUEUED_FIRST" -- QUEUED_FIRST | ALPHA | ILEVEL
 end
 
--- Build a stable signature of the player's current talents (Classic-style trees)
-function ATS:ComputeTalentSignature()
-    local _, classTag = UnitClass and UnitClass("player")
-    classTag = classTag or "UNKNOWN"
-
-    local tabs = {}
-    local group = (type(GetActiveTalentGroup) == "function" and GetActiveTalentGroup()) or 1
-    if GetNumTalentTabs and GetTalentInfo and GetNumTalents then
-        local numTabs = GetNumTalentTabs()
-        for t = 1, numTabs do
-            local points = 0
-            local num = GetNumTalents(t)
-            for i = 1, num do
-                local _, _, _, _, rank = GetTalentInfo(t, i)
-                points = points + (tonumber(rank) or 0)
-            end
-            table.insert(tabs, tostring(points))
+-- Sync the options panel 'Enable auto switching' checkbox (if present)
+function ATS:UpdateOptionsAutoCheckbox()
+    if self.optionCheckboxes and self.optionCheckboxes.autoSwitch then
+        local cb = self.optionCheckboxes.autoSwitch
+        if cb.SetChecked then
+            local db = AutoTrinketSwitcherCharDB or {}
+            local m13 = db.manual and db.manual[13]
+            local m14 = db.manual and db.manual[14]
+            local derivedOn = not (m13 and m14) -- ON if at least one slot is auto
+            cb:SetChecked(derivedOn)
         end
     end
-
-    if #tabs == 0 then
-        return string.format("%s:G%s:NO_TALENTS", classTag, tostring(group))
-    else
-        return string.format("%s:G%s:%s", classTag, tostring(group), table.concat(tabs, "-"))
-    end
 end
 
--- Ensure per-talent profiles exist and activate the one matching current talents
-function ATS:SyncActiveTalentProfile(opts)
+-- Centralized setter for global auto-switch state, with manual-slot reconciliation.
+function ATS:SetGlobalAutoSwitch(enabled)
     EnsureDB()
     local db = AutoTrinketSwitcherCharDB
+    enabled = not not enabled
 
-    db.talentProfiles = db.talentProfiles or nil -- lazily create on first sync
-
-    local signature = self:ComputeTalentSignature()
-    local firstSetup = (db.talentProfiles == nil)
-
-    if firstSetup then
-        -- Migrate existing queues to a profile for the current talents
-        db.talentProfiles = {}
-        db.talentProfiles[signature] = {
-            queues = db.queues or { [13] = {}, [14] = {} },
-        }
-        db.activeTalentSignature = signature
-        db.queues = db.talentProfiles[signature].queues
-        return false -- no visible switch; just initialization
+    if not db.manual then db.manual = { [13]=false, [14]=false } end
+    if enabled then
+        -- Turning ON: both slots go auto
+        db.manual[13] = false
+        db.manual[14] = false
+    else
+        -- Turning OFF: both slots go manual
+        db.manual[13] = true
+        db.manual[14] = true
     end
 
-    db.talentProfiles[signature] = db.talentProfiles[signature] or { queues = { [13] = {}, [14] = {} } }
-
-    local switched = (db.activeTalentSignature ~= signature)
-    db.activeTalentSignature = signature
-    -- Point live queues to this profile's queues
-    db.queues = db.talentProfiles[signature].queues
-
-    if opts and opts.silent then return false end
-    return switched
+    db.autoSwitch = enabled
+    self:UpdateButtons()
+    self:UpdateOptionsAutoCheckbox()
 end
+
+-- Called after a per-slot manual toggle to keep global in sync
+function ATS:OnManualToggle()
+    EnsureDB()
+    -- Only refresh UI/checkbox to reflect derived ON/OFF from per-slot manual flags
+    self:UpdateButtons()
+    self:UpdateOptionsAutoCheckbox()
+end
+
+-- Talent profile functions moved to Profiles.lua
 
 -- Helper to position the tooltip at the game's default location (or legacy side-anchored)
-function ATS:GetTooltip()
-    if AutoTrinketSwitcherCharDB and AutoTrinketSwitcherCharDB.cleanTooltips then
-        if not self.cleanTooltip then
-            local template = "GameTooltipTemplate"
-            self.cleanTooltip = CreateFrame("GameTooltip", "ATS_CleanTooltip", UIParent, template)
-            -- Ensure context clears when this tooltip hides
-            if self.cleanTooltip.HookScript then
-                self.cleanTooltip:HookScript("OnHide", function()
-                    if not ATS.tooltipPinned then ATS.tooltipContext = nil end
-                end)
-            end
-        end
-        return self.cleanTooltip
-    end
-    return GameTooltip
-end
-
-function ATS:HideTooltip()
-    if self.cleanTooltip and self.cleanTooltip.Hide then self.cleanTooltip:Hide() end
-    if GameTooltip and GameTooltip.Hide then GameTooltip:Hide() end
-end
-
-local function SetTooltipOwner(frame)
-    local tip = ATS:GetTooltip()
-    if AutoTrinketSwitcherCharDB.useDefaultTooltipAnchor then
-        tip:SetOwner(frame, "ANCHOR_NONE")
-        if GameTooltip_SetDefaultAnchor then
-            GameTooltip_SetDefaultAnchor(tip, frame)
-        else
-            tip:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -13, 64)
-        end
-    else
-        tip:SetOwner(frame, "ANCHOR_RIGHT")
-    end
-    return tip
-end
+-- Tooltip helpers moved to Tooltips.lua
 
 -- Utility: get remaining cooldown for an itemID
 local function GetItemRemaining(itemID)
@@ -198,10 +151,16 @@ local function ChooseCandidate(slot, avoidID)
     local reservedOther = GetReservationForSlot(otherSlot)
     for i, itemID in ipairs(queue) do
         if itemID ~= equippedID and itemID ~= avoidID and itemID ~= reservedOther then
-            local cd = GetItemRemaining(itemID)
-            if cd <= 30 then
-                targetID, targetIdx = itemID, i
-                break
+            local allowed = true
+            -- Skip items not in bags/equipped
+            local count = GetItemCount and GetItemCount(itemID, false) or 1
+            if count == 0 then allowed = false end
+            if allowed then
+                local cd = GetItemRemaining(itemID)
+                if cd <= 30 then
+                    targetID, targetIdx = itemID, i
+                    break
+                end
             end
         end
     end
@@ -285,65 +244,7 @@ function ATS:UpdateLockState()
     end
 end
 
--- Display tooltip for an equipped slot
-function ATS:ShowTooltip(frame, slot)
-    local tiny = AutoTrinketSwitcherCharDB.tinyTooltips
-    if AutoTrinketSwitcherCharDB.altFullTooltips and IsAltKeyDown() then
-        tiny = false
-    end
-    -- Remember current tooltip context for live modifier refresh
-    self.tooltipContext = { kind = "slot", frame = frame, slot = slot }
-    if tiny then
-        local itemID = GetInventoryItemID("player", slot)
-        if not itemID then return end
-        local tip = SetTooltipOwner(frame)
-        local name = GetItemInfo(itemID)
-        if name then tip:SetText(name) end
-        local _, desc = GetItemSpell(itemID)
-        if desc then tip:AddLine(desc, 1, 1, 1) end
-        tip:Show()
-    else
-        local tip = SetTooltipOwner(frame)
-        tip:SetInventoryItem("player", slot)
-    end
-end
-
--- Display tooltip for an itemID (used in the menu)
-function ATS:ShowItemTooltip(frame, itemID)
-    local tiny = AutoTrinketSwitcherCharDB.tinyTooltips
-    if AutoTrinketSwitcherCharDB.altFullTooltips and IsAltKeyDown() then
-        tiny = false
-    end
-    -- Remember current tooltip context for live modifier refresh
-    self.tooltipContext = { kind = "item", frame = frame, itemID = itemID }
-    if tiny then
-        local tip = SetTooltipOwner(frame)
-        local name = GetItemInfo(itemID)
-        if name then tip:SetText(name) end
-        local _, desc = GetItemSpell(itemID)
-        if desc then tip:AddLine(desc, 1, 1, 1) end
-        tip:Show()
-    else
-        local tip = SetTooltipOwner(frame)
-        tip:SetItemByID(itemID)
-    end
-end
-
--- Re-render tooltip when modifiers change (e.g., ALT toggled)
-function ATS:RefreshTooltip()
-    if not self.tooltipContext then return end
-    local shown = (GameTooltip and GameTooltip.IsShown and GameTooltip:IsShown())
-    if not shown and self.cleanTooltip and self.cleanTooltip.IsShown then
-        shown = self.cleanTooltip:IsShown()
-    end
-    if not shown then return end
-    local ctx = self.tooltipContext
-    if ctx.kind == "slot" and ctx.frame and ctx.slot then
-        self:ShowTooltip(ctx.frame, ctx.slot)
-    elseif ctx.kind == "item" and ctx.frame and ctx.itemID then
-        self:ShowItemTooltip(ctx.frame, ctx.itemID)
-    end
-end
+-- Tooltip display functions moved to Tooltips.lua
 
 -- Attempt to equip a trinket for a given slot based on the rules
 local function CheckSlot(slot)
@@ -393,9 +294,14 @@ local function PendingSwap(slot)
     -- Announce a switch when a queued trinket is within 35s of being ready (or ready)
     for _, itemID in ipairs(AutoTrinketSwitcherCharDB.queues[slot]) do
         if itemID ~= equippedID then
-            local cd = GetItemRemaining(itemID)
-            if cd <= 35 then
-                return true
+            local proceed = true
+            local count = GetItemCount and GetItemCount(itemID, false) or 1
+            if count == 0 then proceed = false end
+            if proceed then
+                local cd = GetItemRemaining(itemID)
+                if cd <= 35 then
+                    return true
+                end
             end
         end
     end
@@ -473,15 +379,19 @@ function ATS:UpdateButtons()
             button.glow:Hide()
         end
 
-        -- Manual badge visibility: show when slot is manual OR global auto-switch is off
+        -- Mount mode indication: red glow around both buttons while mounted override is active
+        if self.mountAutoModified and button.mountGlow then
+            button.mountGlow:SetVertexColor(1, 0, 0, 1)
+            button.mountGlow:Show()
+        elseif button.mountGlow then
+            button.mountGlow:Hide()
+        end
+
+        -- Manual badge visibility
         if button.manualBadge then
             local isManualSlot = AutoTrinketSwitcherCharDB.manual and AutoTrinketSwitcherCharDB.manual[slot]
-            local globalManual = not AutoTrinketSwitcherCharDB.autoSwitch
-            if isManualSlot or globalManual then
-                button.manualBadge:Show()
-            else
-                button.manualBadge:Hide()
-            end
+            -- Show badge only for per-slot manual state. Ignore global auto state.
+            if isManualSlot then button.manualBadge:Show() else button.manualBadge:Hide() end
         end
 
         -- Handle cooldown overlay and text
@@ -601,6 +511,14 @@ function ATS:CreateButtons()
         btn.glow:SetSize(60, 60)
         btn.glow:Hide()
 
+        -- Mount mode red glow (separate from pending swap glow)
+        btn.mountGlow = btn:CreateTexture(nil, "OVERLAY")
+        btn.mountGlow:SetTexture("Interface/Buttons/UI-ActionButton-Border")
+        btn.mountGlow:SetBlendMode("ADD")
+        btn.mountGlow:SetPoint("CENTER")
+        btn.mountGlow:SetSize(64, 64)
+        btn.mountGlow:Hide()
+
         -- Manual mode badge (bottom-left)
         btn.manualBadge = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         btn.manualBadge:SetPoint("BOTTOMLEFT", 2, 2)
@@ -688,8 +606,7 @@ function ATS:CreateMinimapButton()
                 AutoTrinketSwitcherCharDB.lockWindows = not AutoTrinketSwitcherCharDB.lockWindows
                 ATS:UpdateLockState()
             elseif IsControlKeyDown() then
-                AutoTrinketSwitcherCharDB.autoSwitch = not AutoTrinketSwitcherCharDB.autoSwitch
-                ATS:UpdateButtons()
+                local db=AutoTrinketSwitcherCharDB or {}; local on = not ((db.manual and db.manual[13]) and (db.manual and db.manual[14])); ATS:SetGlobalAutoSwitch(not on)
             else
                 if ATS.optionsWindow then
                     if ATS.optionsWindow:IsShown() then
@@ -729,6 +646,8 @@ function ATS:PLAYER_LOGIN()
     EnsureDB()
     -- Initialize or attach to the talent-based profile for the current build
     self:SyncActiveTalentProfile({ silent = true })
+    -- Prune missing items from queues on login
+    if self.PruneMissingFromQueues then self:PruneMissingFromQueues() end
     self:CreateOptions()
     self:CreateButtons()
     self:CreateMinimapButton()
@@ -760,15 +679,52 @@ function ATS:PLAYER_LOGIN()
 
     -- Slash command: /ats and /ats help show quick usage help
     SLASH_AUTOTRINKETSWITCHER1 = "/ats"
-    SlashCmdList["AUTOTRINKETSWITCHER"] = function(_)
-        local function say(text)
-            DEFAULT_CHAT_FRAME:AddMessage("|cffFFD100AutoTrinketSwitcher:|r " .. text)
+    SlashCmdList["AUTOTRINKETSWITCHER"] = function(msg)
+        local function out(text)
+            DEFAULT_CHAT_FRAME:AddMessage(text)
         end
-        say("- Hover: Shows menu; also shows tooltip if enabled")
-        say("- Left-click: Use Trinket")
-        say("- Shift+ Left/Right-Click: Add/Remove trinket to the priority queue (Left = slot 13, Right = slot 14)")
-        say("- Ctrl + Left/Right-Click: Equip AND toggle manual mode (Left = slot 13, Right = slot 14)")
-        say("- Right-Click: Toggle pinned tooltip when tooltip mode is Right-Click")
+        local function header(text)
+            out("|cffffd100" .. text .. "|r")
+        end
+        local function bullet(text)
+            out("  - " .. text)
+        end
+
+        msg = tostring(msg or ""):lower():gsub("^%s+"," "):gsub("%s+$","")
+        if msg:match("^clear") then
+            local which = msg:match("^clear%s+(%S+)") or ""
+            local function clear(slot)
+                AutoTrinketSwitcherCharDB.queues[slot] = {}
+            end
+            if which == "13" then
+                clear(13)
+                header("Auto Trinket Switcher")
+                bullet("Cleared queue for slot 13")
+            elseif which == "14" then
+                clear(14)
+                header("Auto Trinket Switcher")
+                bullet("Cleared queue for slot 14")
+            elseif which == "both" or which == "all" then
+                clear(13); clear(14)
+                header("Auto Trinket Switcher")
+                bullet("Cleared queues for slot 13 and 14")
+            else
+                header("Auto Trinket Switcher")
+                bullet("Usage: /ats clear 13 | 14 | both")
+            end
+            if ATS.menu and ATS.menu:IsShown() and ATS.menu.anchor then ATS:ShowMenu(ATS.menu.anchor) end
+            ATS:UpdateButtons()
+            return
+        end
+
+        -- Help
+        header("Auto Trinket Switcher")
+        bullet("Hover: Shows menu; also shows tooltip if enabled")
+        bullet("Left-click: Use Trinket")
+        bullet("Shift + Left/Right-Click: Add/Remove trinket to the priority queue (Left = slot 13, Right = slot 14)")
+        bullet("Ctrl + Left/Right-Click: Equip AND toggle manual mode (Left = slot 13, Right = slot 14)")
+        bullet("Right-Click: Toggle pinned tooltip when tooltip mode is Right-Click")
+        bullet("Slash: /ats clear 13 | 14 | both")
     end
 end
 
@@ -817,22 +773,7 @@ ATS:SetScript("OnEvent", function(self, event)
     end
 end)
 
--- Apply profile switching and notify the player
-function ATS:OnTalentConfigurationChanged()
-    local switched = self:SyncActiveTalentProfile()
-    if switched then
-        local msg = "Switched trinket queues to current talents"
-        if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
-            DEFAULT_CHAT_FRAME:AddMessage("|cffFFD100AutoTrinketSwitcher:|r " .. msg)
-        end
-        -- Refresh UI elements
-        self:UpdateButtons()
-        if self.menu and self.menu:IsShown() then
-            self:RefreshMenuNumbers()
-            self:UpdateMenuCooldowns()
-        end
-    end
-end
+-- Talent-change handling moved to Profiles.lua
 
 -- Mount handling: auto-disable autoSwitch when mounting; restore previous state on dismount
 function ATS:UpdateMountState()
@@ -851,6 +792,7 @@ function ATS:UpdateMountState()
                 AutoTrinketSwitcherCharDB.autoSwitch = false
                 self.mountAutoModified = true
                 self:UpdateButtons()
+                self:UpdateOptionsAutoCheckbox()
             end
         end
     else
@@ -859,6 +801,7 @@ function ATS:UpdateMountState()
             self.prevAutoSwitch = nil
             self.mountAutoModified = false
             self:UpdateButtons()
+            self:UpdateOptionsAutoCheckbox()
             -- Guard against immediate rapid swaps after dismount
             self.resumeGuardUntil = GetTime() + 1.5
         end
@@ -870,3 +813,27 @@ function ATS:MODIFIER_STATE_CHANGED()
     if not AutoTrinketSwitcherCharDB or not AutoTrinketSwitcherCharDB.altFullTooltips then return end
     self:RefreshTooltip()
 end
+
+-- Remove any queued items that are not currently in the player's bags or equipped
+function ATS:PruneMissingFromQueues()
+    if not AutoTrinketSwitcherCharDB or not AutoTrinketSwitcherCharDB.queues then return end
+    for _, slot in ipairs({13,14}) do
+        local q = AutoTrinketSwitcherCharDB.queues[slot]
+        local i = 1
+        while i <= #q do
+            local id = q[i]
+            local count = GetItemCount and GetItemCount(id, false) or 1
+            local eq13 = GetInventoryItemID("player", 13)
+            local eq14 = GetInventoryItemID("player", 14)
+            if count == 0 and id ~= eq13 and id ~= eq14 then
+                table.remove(q, i)
+            else
+                i = i + 1
+            end
+        end
+    end
+    if self.menu and self.menu:IsShown() then
+        self:RefreshMenuNumbers()
+    end
+end
+
