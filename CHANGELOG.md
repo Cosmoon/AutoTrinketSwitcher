@@ -7,7 +7,7 @@ All notable changes to AutoTrinketSwitcher are documented here.
 - Added a ready glow that reuses the mounted border whenever an equipped on-use trinket comes off cooldown.
 - Added a "Trinket ready glow" toggle and color picker so the effect can be customized or disabled.
 - Mount override persistence fixes: the red mounted indicator now survives login/reload and reactivates while mounted.
-- Trinket menus now snap above the buttons when placed near the top half of the screen and below when placed near the bottom.
+- Trinket menus now align with the top of the buttons when placed near the top half of the screen and with the bottom when placed near the bottom.
 - General polish and small bug fixes around tooltip/menu refresh and cooldown handling while mounted.
 
 1.3 - 2025-09-16
