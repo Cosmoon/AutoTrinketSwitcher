@@ -22,7 +22,7 @@ In‑game usage
   - Alt + Hover: Shows full tooltip
 - Trinket menu (shows all your trinkets, bag + equipped):
   - Shift‑Click: Add/Remove trinket to the priority queue of the clicked slot (Left = slot 13, Right = slot 14)
-  - Ctrl‑Click: Equip in slot AND toggle manual mode for slot (Left = slot 13, Right = slot 14)
+  - Ctrl‑Click: Equip in slot AND toggle manual mode for slot (Left = slot 13, Right = slot 14) or toggle auto queue
   - Right‑Click: Toggle pinned tooltip when tooltip mode is Right‑Click
 - Manual mode “M” badge:
   - Shown on a slot when that slot is manual, or when auto switching is OFF.

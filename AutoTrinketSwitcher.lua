@@ -38,6 +38,10 @@ local function EnsureDB()
     db.wrapDirection = db.wrapDirection or "HORIZONTAL" -- or VERTICAL
     db.altFullTooltips = db.altFullTooltips or false
     db.menuSortMode = db.menuSortMode or "QUEUED_FIRST" -- QUEUED_FIRST | ALPHA | ILEVEL
+    db.mountOverrideActive = db.mountOverrideActive or false
+    if not db.mountOverrideActive then
+        db.mountOverridePrevAutoSwitch = nil
+    end
 end
 
 -- Sync the options panel 'Enable auto switching' checkbox (if present)
@@ -380,7 +384,8 @@ function ATS:UpdateButtons()
         end
 
         -- Mount mode indication: red glow around both buttons while mounted override is active
-        if self.mountAutoModified and button.mountGlow then
+        local mountOverrideActive = (self.mountAutoModified == true) or (AutoTrinketSwitcherCharDB and AutoTrinketSwitcherCharDB.mountOverrideActive)
+        if (self.isMounted or mountOverrideActive) and button.mountGlow then
             button.mountGlow:SetVertexColor(1, 0, 0, 1)
             button.mountGlow:Show()
         elseif button.mountGlow then
@@ -656,6 +661,7 @@ function ATS:PLAYER_LOGIN()
     self.cdElapsed = 0
     self.mountAutoModified = false
     self.prevAutoSwitch = nil
+    self.isMounted = false
     self:SetScript("OnUpdate", function(_, e)
         self.elapsed = self.elapsed + e
         self.cdElapsed = self.cdElapsed + e
@@ -777,6 +783,9 @@ end)
 
 -- Mount handling: auto-disable autoSwitch when mounting; restore previous state on dismount
 function ATS:UpdateMountState()
+    EnsureDB()
+    local db = AutoTrinketSwitcherCharDB
+    local prevMounted = self.isMounted
     local mounted = false
     if IsMounted then
         mounted = IsMounted()
@@ -785,26 +794,54 @@ function ATS:UpdateMountState()
         mounted = false
     end
 
+    local refreshButtons = false
+    local refreshOptions = false
+
     if mounted then
-        if not self.mountAutoModified then
-            self.prevAutoSwitch = AutoTrinketSwitcherCharDB.autoSwitch
-            if AutoTrinketSwitcherCharDB.autoSwitch then
-                AutoTrinketSwitcherCharDB.autoSwitch = false
-                self.mountAutoModified = true
-                self:UpdateButtons()
-                self:UpdateOptionsAutoCheckbox()
-            end
+        -- Rehydrate the mount override if we relog while already mounted
+        if not self.mountAutoModified and db.mountOverrideActive then
+            self.prevAutoSwitch = db.mountOverridePrevAutoSwitch
+            self.mountAutoModified = true
+            refreshButtons = true
+            refreshOptions = true
+        end
+
+        if not self.mountAutoModified and db.autoSwitch then
+            local previous = db.autoSwitch and true or false
+            db.autoSwitch = false
+            self.prevAutoSwitch = previous
+            self.mountAutoModified = true
+            db.mountOverrideActive = true
+            db.mountOverridePrevAutoSwitch = previous
+            refreshButtons = true
+            refreshOptions = true
         end
     else
-        if self.mountAutoModified then
-            AutoTrinketSwitcherCharDB.autoSwitch = self.prevAutoSwitch and true or false
+        if self.mountAutoModified or db.mountOverrideActive then
+            local restore = self.prevAutoSwitch
+            if restore == nil then
+                restore = db.mountOverridePrevAutoSwitch
+            end
+            db.autoSwitch = restore and true or false
             self.prevAutoSwitch = nil
             self.mountAutoModified = false
-            self:UpdateButtons()
-            self:UpdateOptionsAutoCheckbox()
+            db.mountOverrideActive = false
+            db.mountOverridePrevAutoSwitch = nil
+            refreshButtons = true
+            refreshOptions = true
             -- Guard against immediate rapid swaps after dismount
             self.resumeGuardUntil = GetTime() + 1.5
         end
+    end
+
+    self.isMounted = mounted
+
+    if refreshOptions then
+        self:UpdateOptionsAutoCheckbox()
+    end
+
+    if refreshButtons or prevMounted ~= mounted then
+        self:UpdateButtons()
     end
 end
 
