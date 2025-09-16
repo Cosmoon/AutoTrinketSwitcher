@@ -2,7 +2,7 @@
 ## Title: AutoTrinketSwitcher
 ## Notes: Automatically switches trinkets with an options panel and clickable trinket slots
 ## Author: Cosmoon
-## Version: 1.3
+## Version: 1.4
 ## SavedVariablesPerCharacter: AutoTrinketSwitcherCharDB
 ## IconTexture: Interface\AddOns\AutoTrinketSwitcher\Media\AutoTrinketSwitche_Logo.blp
 AutoTrinketSwitcher.lua

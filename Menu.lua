@@ -241,15 +241,33 @@ function ATS:ShowMenu(anchor)
 
     -- Always anchor to the buttons frame so the menu stays outside on the chosen side
     self.menu.anchor = self.buttonFrame or anchor
+    local anchorFrame = self.menu.anchor or UIParent
     self.menu:ClearAllPoints()
+    local belowMiddle = false
+    if anchorFrame and anchorFrame:GetCenter() then
+        local _, anchorY = anchorFrame:GetCenter()
+        local parentHeight = UIParent and UIParent:GetHeight() or 0
+        if anchorY and parentHeight and parentHeight > 0 then
+            belowMiddle = anchorY < (parentHeight / 2)
+        end
+    end
+
     if dir == "TOP" then
-        self.menu:SetPoint("BOTTOM", self.menu.anchor, "TOP", 0, 4)
+        self.menu:SetPoint("BOTTOM", anchorFrame, "TOP", 0, 4)
     elseif dir == "LEFT" then
-        self.menu:SetPoint("RIGHT", self.menu.anchor, "LEFT", -4, 0)
+        if belowMiddle then
+            self.menu:SetPoint("BOTTOMRIGHT", anchorFrame, "BOTTOMLEFT", -4, 0)
+        else
+            self.menu:SetPoint("TOPRIGHT", anchorFrame, "TOPLEFT", -4, 0)
+        end
     elseif dir == "RIGHT" then
-        self.menu:SetPoint("LEFT", self.menu.anchor, "RIGHT", 4, 0)
+        if belowMiddle then
+            self.menu:SetPoint("BOTTOMLEFT", anchorFrame, "BOTTOMRIGHT", 4, 0)
+        else
+            self.menu:SetPoint("TOPLEFT", anchorFrame, "TOPRIGHT", 4, 0)
+        end
     else
-        self.menu:SetPoint("TOP", self.menu.anchor, "BOTTOM", 0, -4)
+        self.menu:SetPoint("TOP", anchorFrame, "BOTTOM", 0, -4)
     end
 
     self:RefreshMenuNumbers()

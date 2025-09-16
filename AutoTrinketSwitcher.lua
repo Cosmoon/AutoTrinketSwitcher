@@ -10,6 +10,7 @@ local function EnsureDB()
     db.queues = db.queues or { [13] = {}, [14] = {} }
     db.menuOnlyOutOfCombat = db.menuOnlyOutOfCombat ~= false
     db.autoSwitch = db.autoSwitch ~= false
+    db.readyGlowEnabled = db.readyGlowEnabled ~= false
 
     if db.showCooldowns ~= nil and db.showCooldownNumbers == nil then
         db.showCooldownNumbers = db.showCooldowns
@@ -30,6 +31,7 @@ local function EnsureDB()
     db.colors.slot14 = db.colors.slot14 or { r = 1, g = 0.82, b = 0 }
     db.colors.glow   = db.colors.glow   or { r = 1, g = 1, b = 0 }
     db.colors.manualBadge = db.colors.manualBadge or { r = 1, g = 1, b = 1 }
+    db.colors.readyGlow = db.colors.readyGlow or { r = 1, g = 1, b = 1 }
 
 
     db.buttonPos = db.buttonPos or { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 }
@@ -120,6 +122,16 @@ local function ItemHasUse(itemID)
     if not itemID then return false end
     local useName = GetItemSpell(itemID)
     return useName ~= nil
+end
+
+local function SlotTrinketReady(slot)
+    local itemID = GetInventoryItemID("player", slot)
+    if not itemID or not ItemHasUse(itemID) then return false end
+    local start, duration = GetItemCooldown(itemID)
+    if not start or not duration then return false end
+    if start == 0 or duration == 0 then return true end
+    local remaining = start + duration - GetTime()
+    return remaining <= 0
 end
 
 -- If the top-priority item for a slot isn't ready, reserve the currently equipped
@@ -383,13 +395,20 @@ function ATS:UpdateButtons()
             button.glow:Hide()
         end
 
-        -- Mount mode indication: red glow around both buttons while mounted override is active
-        local mountOverrideActive = (self.mountAutoModified == true) or (AutoTrinketSwitcherCharDB and AutoTrinketSwitcherCharDB.mountOverrideActive)
-        if (self.isMounted or mountOverrideActive) and button.mountGlow then
-            button.mountGlow:SetVertexColor(1, 0, 0, 1)
-            button.mountGlow:Show()
-        elseif button.mountGlow then
-            button.mountGlow:Hide()
+        -- Mount/ready indication reuse the same highlight frame
+        if button.mountGlow then
+            local mountOverrideActive = (self.mountAutoModified == true) or (AutoTrinketSwitcherCharDB and AutoTrinketSwitcherCharDB.mountOverrideActive)
+            local mountActive = self.isMounted or mountOverrideActive
+            if mountActive then
+                button.mountGlow:SetVertexColor(1, 0, 0, 1)
+                button.mountGlow:Show()
+            elseif AutoTrinketSwitcherCharDB.readyGlowEnabled ~= false and SlotTrinketReady(slot) then
+                local c = AutoTrinketSwitcherCharDB.colors.readyGlow
+                button.mountGlow:SetVertexColor(c.r, c.g, c.b, 1)
+                button.mountGlow:Show()
+            else
+                button.mountGlow:Hide()
+            end
         end
 
         -- Manual badge visibility

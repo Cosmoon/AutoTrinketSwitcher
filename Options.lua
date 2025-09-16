@@ -44,6 +44,9 @@ function ATS:CreateOptions()
             if key == "showCooldownNumbers" then ATS:UpdateButtons() end
             if key == "largeNumbers" then ATS:UpdateCooldownFont() end
             if key == "lockWindows" then ATS:UpdateLockState() end
+            if key == "readyGlowEnabled" then
+                if ATS.UpdateButtons then ATS:UpdateButtons() end
+            end
             if key == "useDefaultTooltipAnchor" then -- nothing immediate besides tooltip placement
                 -- no-op; placement applied next time tooltips show
             end
@@ -69,6 +72,7 @@ function ATS:CreateOptions()
     local g6 = CreateCheck(generalBox, "Use tiny tooltips", "tinyTooltips", gHeader)
     local g7 = CreateCheck(generalBox, "Hold ALT for full tooltips", "altFullTooltips", gHeader)
     local g8 = CreateCheck(generalBox, "Block other addon info in tooltips", "cleanTooltips", gHeader)
+    local g9 = CreateCheck(generalBox, "Trinket ready glow", "readyGlowEnabled", gHeader)
 
     -- Reposition into two columns
     local function PlaceCheck(cb, col, row)
@@ -79,6 +83,7 @@ function ATS:CreateOptions()
     PlaceCheck(g1, 1, 1)
     PlaceCheck(g2, 1, 2)
     PlaceCheck(g3, 1, 3)
+    PlaceCheck(g9, 1, 4)
     PlaceCheck(g4, 2, 1)
     PlaceCheck(g5, 2, 2)
     PlaceCheck(g6, 2, 3)
@@ -86,7 +91,7 @@ function ATS:CreateOptions()
     PlaceCheck(g8, 2, 5)
 
     local tooltipLabel = generalBox:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    tooltipLabel:SetPoint("TOPLEFT", gHeader, "BOTTOMLEFT", gColLeftX, gRowY - 3 * 28 - 16)
+    tooltipLabel:SetPoint("TOPLEFT", gHeader, "BOTTOMLEFT", gColLeftX, gRowY - 4 * 28 - 16)
     tooltipLabel:SetText("Tooltips")
 
     local tooltipDrop = CreateFrame("Frame", "ATSTooltipDropdown", generalBox, "UIDropDownMenuTemplate")
@@ -263,6 +268,7 @@ function ATS:CreateOptions()
                 c.r, c.g, c.b = r, g, b
                 Update()
                 ATS:ApplyColorSettings()
+                if ATS.UpdateButtons then ATS:UpdateButtons() end
             end
             ColorPickerFrame.func, ColorPickerFrame.swatchFunc, ColorPickerFrame.cancelFunc = setColor, setColor, setColor
             ColorPickerFrame.hasOpacity = false
@@ -283,8 +289,10 @@ function ATS:CreateOptions()
     local c3 = CreateColorOption(colorBox, "Pending swap", "glow", cHeader, -8)
     c3:ClearAllPoints(); c3:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 344, -8)
     -- Place fourth swatch on the same first row (4 columns)
-    local c4 = CreateColorOption(colorBox, "Manual badge", "manualBadge", cHeader, -8)
+    local c4 = CreateColorOption(colorBox, "Manual", "manualBadge", cHeader, -8)
     c4:ClearAllPoints(); c4:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 508, -8)
+    local c5 = CreateColorOption(colorBox, "Ready glow", "readyGlow", cHeader, -48)
+    c5:ClearAllPoints(); c5:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 16, -48)
 
     -- Spacer below colour box to guarantee visual padding to the window edge
     local bottomSpacer = CreateFrame("Frame", nil, panel)
@@ -317,7 +325,7 @@ function ATS:CreateOptions()
             if mBottom == 0 then mBottom = (mHeader:GetBottom() - 60) end
             menuBox:SetHeight(menuBox:GetTop() - mBottom + 40)
 
-            local last = c4 or c3
+            local last = c5 or c4 or c3
             colorBox:SetHeight(colorBox:GetTop() - last:GetBottom() + 24)
         end
 
