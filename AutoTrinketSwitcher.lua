@@ -2,6 +2,9 @@ local ATS = CreateFrame("Frame", "AutoTrinketSwitcherFrame")
 -- Addon logo used for the minimap button
 local ATS_MINIMAP_LOGO = "Interface\\AddOns\\AutoTrinketSwitcher\\Media\\AutoTrinketSwitche_Logo.blp"
 
+local LDB = LibStub and LibStub("LibDataBroker-1.1", true)
+local LDBIcon = LibStub and LibStub("LibDBIcon-1.0", true)
+
 -- Ensure saved variables exist after they are loaded
 local function EnsureDB()
     AutoTrinketSwitcherCharDB = AutoTrinketSwitcherCharDB or {}
@@ -35,6 +38,7 @@ local function EnsureDB()
 
 
     db.buttonPos = db.buttonPos or { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 }
+    db.minimap = db.minimap or { hide = false }
     db.manual = db.manual or { [13] = false, [14] = false }
     db.queueNumberSize = db.queueNumberSize or 12
     db.wrapDirection = db.wrapDirection or "HORIZONTAL" -- or VERTICAL
@@ -455,12 +459,65 @@ function ATS:UpdateButtons()
     if self.UpdateMinimapIcon then self:UpdateMinimapIcon() end
 end
 
+function ATS:OnMinimapClick(mouse)
+    EnsureDB()
+    if mouse == "LeftButton" then
+        if self.buttonFrame then
+            if self.buttonFrame:IsShown() then
+                self.buttonFrame:Hide()
+            else
+                self.buttonFrame:Show()
+            end
+        end
+    elseif mouse == "RightButton" then
+        if IsShiftKeyDown() then
+            AutoTrinketSwitcherCharDB.lockWindows = not AutoTrinketSwitcherCharDB.lockWindows
+            if self.UpdateLockState then self:UpdateLockState() end
+        elseif IsControlKeyDown() then
+            local manual = AutoTrinketSwitcherCharDB.manual or {}
+            local on = not ((manual[13]) and (manual[14]))
+            self:SetGlobalAutoSwitch(not on)
+        else
+            if self.optionsWindow then
+                if self.optionsWindow:IsShown() then
+                    self.optionsWindow:Hide()
+                    if self.optionsPanel then self.optionsPanel:Hide() end
+                else
+                    if self.optionsPanel then self.optionsPanel:Show() end
+                    self.optionsWindow:Show()
+                end
+            end
+        end
+        if self.menu and self.menu:IsShown() then self.menu:Hide() end
+    end
+end
+
+function ATS:OnMinimapTooltipShow(tooltip)
+    if not tooltip then return end
+    tooltip:SetText("AutoTrinketSwitcher")
+    local WHITE = "FFFFFFFF"
+    local GOLD  = "FFFFD100"
+    local function line(label, text)
+        return "|c"..WHITE..label.."|r |c"..GOLD..text.."|r"
+    end
+    tooltip:AddLine(line("Left-Click:", "Show/Hide Trinkets"))
+    tooltip:AddLine(line("Right-Click:", "Open Option Menu"))
+    tooltip:AddLine(line("Shift+ Right-Click:", "Lock/Unlock Buttons"))
+    tooltip:AddLine(line("Ctrl + Right-Click:", "Toggle Auto Switching"))
+    tooltip:Show()
+end
 -- Update minimap button icon to the currently equipped trinket in slot 13
 function ATS:UpdateMinimapIcon()
-    if not self.minimapButton or not self.minimapButton.icon then return end
-    -- Always use addon logo for the minimap button icon
+    if self.minimapLDB then
+        self.minimapLDB.icon = ATS_MINIMAP_LOGO
+        self.minimapLDB.iconCoords = {0.08, 0.92, 0.08, 0.92}
+    end
+
+    if not self.minimapButton or not self.minimapButton.icon then
+        return
+    end
+
     self.minimapButton.icon:SetTexture(ATS_MINIMAP_LOGO)
-    -- Slight crop to better fit the circular border
     if self.minimapButton.icon.SetTexCoord then
         self.minimapButton.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     end
@@ -590,80 +647,74 @@ end
 
 -- Create a minimap button for quick toggles
 function ATS:CreateMinimapButton()
+    EnsureDB()
+    local db = AutoTrinketSwitcherCharDB
+
+    if LDB and LDBIcon then
+        if not self.minimapLDB then
+            self.minimapLDB = LDB:NewDataObject("AutoTrinketSwitcher", {
+                type = "launcher",
+                icon = ATS_MINIMAP_LOGO,
+                iconCoords = {0.08, 0.92, 0.08, 0.92},
+                OnClick = function(_, mouse) ATS:OnMinimapClick(mouse) end,
+                OnTooltipShow = function(tooltip) ATS:OnMinimapTooltipShow(tooltip) end,
+            })
+        else
+            self.minimapLDB.icon = ATS_MINIMAP_LOGO
+            self.minimapLDB.iconCoords = {0.08, 0.92, 0.08, 0.92}
+        end
+
+        db.minimap = db.minimap or { hide = false }
+
+        if not LDBIcon:IsRegistered("AutoTrinketSwitcher") then
+            LDBIcon:Register("AutoTrinketSwitcher", self.minimapLDB, db.minimap)
+        end
+
+        if db.minimap.hide then
+            LDBIcon:Hide("AutoTrinketSwitcher")
+        else
+            LDBIcon:Show("AutoTrinketSwitcher")
+        end
+
+        if LDBIcon.GetMinimapButton then
+            self.minimapButton = LDBIcon:GetMinimapButton("AutoTrinketSwitcher") or self.minimapButton
+        end
+
+        self:UpdateMinimapIcon()
+        return
+    end
+
     local btn = CreateFrame("Button", "ATS_MinimapButton", Minimap)
-    -- Use standard minimap button dimensions so the tracking ring fits correctly
     btn:SetSize(32, 32)
     btn:SetFrameStrata("HIGH")
     btn:ClearAllPoints()
     btn:SetPoint("CENTER", Minimap, "CENTER", 0, 0)
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
-    -- Icon + circular border similar to Blizzard tracking button
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
     btn.icon:SetPoint("CENTER", 0, 0)
     btn.icon:SetSize(20, 20)
-    -- Use addon logo as the minimap icon
     btn.icon:SetTexture(ATS_MINIMAP_LOGO)
-    btn.icon:SetTexCoord(0.1, 0.9, 0.1, 0.9)
+    btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
     btn.border = btn:CreateTexture(nil, "OVERLAY")
     btn.border:SetTexture("Interface/Minimap/MiniMap-TrackingBorder")
-    -- Match Blizzard/DBIcon style: 54x54 ring anchored to button's top-left
     btn.border:SetSize(54, 54)
     btn.border:ClearAllPoints()
     btn.border:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
 
-    -- Initialize icon from current slot 13
-    self:UpdateMinimapIcon()
-
     btn:SetHighlightTexture("Interface/Minimap/UI-Minimap-ZoomButton-Highlight")
 
-    btn:SetScript("OnClick", function(_, mouse)
-        if mouse == "LeftButton" then
-            if ATS.buttonFrame:IsShown() then
-                ATS.buttonFrame:Hide()
-            else
-                ATS.buttonFrame:Show()
-            end
-        elseif mouse == "RightButton" then
-            if IsShiftKeyDown() then
-                AutoTrinketSwitcherCharDB.lockWindows = not AutoTrinketSwitcherCharDB.lockWindows
-                ATS:UpdateLockState()
-            elseif IsControlKeyDown() then
-                local db=AutoTrinketSwitcherCharDB or {}; local on = not ((db.manual and db.manual[13]) and (db.manual and db.manual[14])); ATS:SetGlobalAutoSwitch(not on)
-            else
-                if ATS.optionsWindow then
-                    if ATS.optionsWindow:IsShown() then
-                        ATS.optionsWindow:Hide()
-                        if ATS.optionsPanel then ATS.optionsPanel:Hide() end
-                    else
-                        if ATS.optionsPanel then ATS.optionsPanel:Show() end
-                        ATS.optionsWindow:Show()
-                    end
-                end
-            end
-            -- Also hide the trinket menu if it is open
-            if ATS.menu and ATS.menu:IsShown() then ATS.menu:Hide() end
-        end
-    end)
+    btn:SetScript("OnClick", function(_, mouse) ATS:OnMinimapClick(mouse) end)
 
-    btn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("AutoTrinketSwitcher")
-        local WHITE = "FFFFFFFF"
-        local GOLD  = "FFFFD100"
-        local function line(label, text)
-            return "|c"..WHITE..label.."|r |c"..GOLD..text.."|r"
-        end
-        GameTooltip:AddLine(line("Left-Click:", "Show/Hide Trinkets"))
-        GameTooltip:AddLine(line("Right-Click:", "Open Option Menu"))
-        GameTooltip:AddLine(line("Shift+ Right-Click:", "Lock/Unlock Buttons"))
-        GameTooltip:AddLine(line("Ctrl + Right-Click:", "Toggle Auto Switching"))
-        GameTooltip:Show()
+    btn:SetScript("OnEnter", function(frame)
+        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        ATS:OnMinimapTooltipShow(GameTooltip)
     end)
     btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     self.minimapButton = btn
+    self:UpdateMinimapIcon()
 end
 
 function ATS:PLAYER_LOGIN()

@@ -3,6 +3,10 @@ Changelog
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
+1.5 - 2025-09-20
+- Minimap button now uses LibDBIcon/LibDataBroker so it can be dragged and remembers its position.
+- Falls back to the built-in minimap button if the libraries are missing.
+
 1.4 - 2025-09-19
 - Added a ready glow that reuses the mounted border whenever an equipped on-use trinket comes off cooldown.
 - Added a "Trinket ready glow" toggle and color picker so the effect can be customized or disabled.
