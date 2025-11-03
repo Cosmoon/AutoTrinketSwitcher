@@ -36,10 +36,11 @@ local function EnsureDB()
     db.colors.manualBadge = db.colors.manualBadge or { r = 1, g = 1, b = 1 }
     db.colors.readyGlow = db.colors.readyGlow or { r = 1, g = 1, b = 1 }
 
-
     db.buttonPos = db.buttonPos or { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 }
     db.minimap = db.minimap or { hide = false }
     db.manual = db.manual or { [13] = false, [14] = false }
+    db.manualPreferred = db.manualPreferred or { [13] = nil, [14] = nil }
+    db.buttonFrameHidden = db.buttonFrameHidden == true
     db.queueNumberSize = db.queueNumberSize or 12
     db.wrapDirection = db.wrapDirection or "HORIZONTAL" -- or VERTICAL
     db.altFullTooltips = db.altFullTooltips or false
@@ -71,19 +72,50 @@ function ATS:SetGlobalAutoSwitch(enabled)
     enabled = not not enabled
 
     if not db.manual then db.manual = { [13]=false, [14]=false } end
+    if not db.manualPreferred then db.manualPreferred = { [13] = nil, [14] = nil } end
+    local previousManual = { [13] = db.manual[13], [14] = db.manual[14] }
+
     if enabled then
         -- Turning ON: both slots go auto
         db.manual[13] = false
         db.manual[14] = false
+        if previousManual[13] then self:RestoreManualTrinket(13) end
+        if previousManual[14] then self:RestoreManualTrinket(14) end
     else
         -- Turning OFF: both slots go manual
         db.manual[13] = true
         db.manual[14] = true
+        db.manualPreferred[13] = GetInventoryItemID("player", 13)
+        db.manualPreferred[14] = GetInventoryItemID("player", 14)
     end
 
     db.autoSwitch = enabled
     self:UpdateButtons()
     self:UpdateOptionsAutoCheckbox()
+end
+
+function ATS:RestoreManualTrinket(slot)
+    EnsureDB()
+    local db = AutoTrinketSwitcherCharDB
+    if not db.manualPreferred then return end
+
+    local itemID = db.manualPreferred[slot]
+    if not itemID then return end
+
+    local current = GetInventoryItemID("player", slot)
+    if current == itemID then return end
+
+    local count = GetItemCount and GetItemCount(itemID, false) or 1
+    if count == 0 then return end
+
+    if C_Item and C_Item.EquipItemByName then
+        C_Item.EquipItemByName(itemID, slot)
+    else
+        EquipItemByName(itemID, slot)
+    end
+
+    self.lastEquip = self.lastEquip or {}
+    self.lastEquip[slot] = GetTime()
 end
 
 -- Called after a per-slot manual toggle to keep global in sync
@@ -465,8 +497,10 @@ function ATS:OnMinimapClick(mouse)
         if self.buttonFrame then
             if self.buttonFrame:IsShown() then
                 self.buttonFrame:Hide()
+                AutoTrinketSwitcherCharDB.buttonFrameHidden = true
             else
                 self.buttonFrame:Show()
+                AutoTrinketSwitcherCharDB.buttonFrameHidden = false
             end
         end
     elseif mouse == "RightButton" then
@@ -560,6 +594,11 @@ function ATS:CreateButtons()
     end
 
     self.buttonFrame = frame
+    if AutoTrinketSwitcherCharDB.buttonFrameHidden then
+        frame:Hide()
+    else
+        frame:Show()
+    end
 
     for index, slot in ipairs({13, 14}) do
         -- Use a secure action button so activating the trinket does not taint

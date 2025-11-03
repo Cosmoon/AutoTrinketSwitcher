@@ -176,12 +176,14 @@ function ATS:ShowMenu(anchor)
             if IsControlKeyDown() then
                 local slot = mouse == "LeftButton" and 13 or 14
                 AutoTrinketSwitcherCharDB.manual = AutoTrinketSwitcherCharDB.manual or { [13]=false, [14]=false }
+                AutoTrinketSwitcherCharDB.manualPreferred = AutoTrinketSwitcherCharDB.manualPreferred or { [13] = nil, [14] = nil }
                 local wasManual = AutoTrinketSwitcherCharDB.manual[slot] and true or false
                 local nowManual = not wasManual
                 AutoTrinketSwitcherCharDB.manual[slot] = nowManual
 
                 -- Equip clicked trinket only when switching from auto -> manual
                 if nowManual and not wasManual then
+                    AutoTrinketSwitcherCharDB.manualPreferred[slot] = self.itemID or GetInventoryItemID("player", slot)
                     if C_Item and C_Item.EquipItemByName then
                         C_Item.EquipItemByName(self.itemID, slot)
                     else
@@ -189,6 +191,7 @@ function ATS:ShowMenu(anchor)
                     end
                 else
                     -- Switching from manual -> auto: resume queue logic immediately if possible
+                    if ATS.RestoreManualTrinket then ATS:RestoreManualTrinket(slot) end
                     if ATS.PerformCheck then ATS:PerformCheck() end
                 end
 
