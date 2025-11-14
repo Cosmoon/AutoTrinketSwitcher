@@ -160,6 +160,24 @@ local function ItemHasUse(itemID)
     return useName ~= nil
 end
 
+local function IsItemEffectActive(itemID)
+    if not itemID then return false end
+    local spellName = GetItemSpell(itemID)
+    if not spellName then return false end
+
+    if AuraUtil and AuraUtil.FindAuraByName then
+        return AuraUtil.FindAuraByName(spellName, "player", "HELPFUL") ~= nil
+    end
+
+    for i = 1, 40 do
+        local name = UnitBuff("player", i)
+        if not name then break end
+        if name == spellName then return true end
+    end
+
+    return false
+end
+
 local function SlotTrinketReady(slot)
     local itemID = GetInventoryItemID("player", slot)
     if not itemID or not ItemHasUse(itemID) then return false end
@@ -194,6 +212,10 @@ local function ChooseCandidate(slot, avoidID)
     local equippedID = GetInventoryItemID("player", slot)
     local equippedCD = GetItemRemaining(equippedID)
     local equippedHasUse = ItemHasUse(equippedID)
+
+    if equippedHasUse and IsItemEffectActive(equippedID) then
+        return nil
+    end
 
     local queue = AutoTrinketSwitcherCharDB.queues[slot]
     local equippedIdx = QueueIndex(slot, equippedID)
@@ -307,6 +329,7 @@ local function CheckSlot(slot)
         local useName = GetItemSpell(equippedID)
         equippedHasUse = useName ~= nil
     end
+    if equippedHasUse and IsItemEffectActive(equippedID) then return end
     -- Only block swapping if the equipped trinket is a usable item AND its cooldown <= 30s
     if equippedHasUse and equippedCD <= 30 then return end
 
