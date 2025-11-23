@@ -161,6 +161,9 @@ function ATS:ShowMenu(anchor)
         btn.cooldown = btn.cooldown or CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
         btn.cooldown:SetAllPoints(true)
         btn.cooldown:SetDrawEdge(false)
+        if btn.cooldown.SetHideCountdownNumbers then
+            btn.cooldown:SetHideCountdownNumbers(true)
+        end
         btn.cdText = btn.cdText or btn.cooldown:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
         btn.cdText:SetPoint("CENTER")
         btn.cdText:SetDrawLayer("OVERLAY", 7)

@@ -641,6 +641,9 @@ function ATS:CreateButtons()
         btn.cooldown:SetAllPoints(true)
         btn.cooldown:SetFrameLevel(btn:GetFrameLevel())
         btn.cooldown:SetDrawEdge(false)
+        if btn.cooldown.SetHideCountdownNumbers then
+            btn.cooldown:SetHideCountdownNumbers(true)
+        end
         btn.cooldown:Hide()
         btn.cdText = btn.cooldown:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
         btn.cdText:SetPoint("CENTER")
