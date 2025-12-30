@@ -1,5 +1,37 @@
 local ATS = AutoTrinketSwitcherFrame
 
+local function NormalizeQueueSet(queue)
+    if not queue then queue = {} end
+    queue[13] = queue[13] or {}
+    queue[14] = queue[14] or {}
+    return queue
+end
+
+local function EnsureProfileQueueSets(profile, seedActive)
+    if not profile.queueSets then
+        if profile.queues then
+            profile.queueSets = {
+                [1] = NormalizeQueueSet(profile.queues),
+                [2] = { [13] = {}, [14] = {} },
+            }
+        else
+            profile.queueSets = {
+                [1] = { [13] = {}, [14] = {} },
+                [2] = { [13] = {}, [14] = {} },
+            }
+        end
+    end
+
+    profile.queueSets[1] = NormalizeQueueSet(profile.queueSets[1])
+    profile.queueSets[2] = NormalizeQueueSet(profile.queueSets[2])
+
+    if profile.activeQueueSet ~= 1 and profile.activeQueueSet ~= 2 then
+        profile.activeQueueSet = (seedActive == 2) and 2 or 1
+    end
+
+    profile.queues = profile.queueSets[profile.activeQueueSet]
+end
+
 -- Build a stable signature of the player's current talents (Classic-style trees)
 function ATS:ComputeTalentSignature()
     local _, classTag = UnitClass and UnitClass("player")
@@ -39,19 +71,32 @@ function ATS:SyncActiveTalentProfile(opts)
 
     if firstSetup then
         db.talentProfiles = {}
-        db.talentProfiles[signature] = {
-            queues = db.queues or { [13] = {}, [14] = {} },
-        }
+        local profile = {}
+        if db.queueSets then
+            profile.queueSets = db.queueSets
+            profile.activeQueueSet = db.activeQueueSet
+        else
+            profile.queues = db.queues or { [13] = {}, [14] = {} }
+        end
+        EnsureProfileQueueSets(profile, db.activeQueueSet)
+        db.talentProfiles[signature] = profile
         db.activeTalentSignature = signature
-        db.queues = db.talentProfiles[signature].queues
+        db.queueSets = profile.queueSets
+        db.activeQueueSet = profile.activeQueueSet
+        db.queues = db.queueSets[db.activeQueueSet]
         return false
     end
 
-    db.talentProfiles[signature] = db.talentProfiles[signature] or { queues = { [13] = {}, [14] = {} } }
+    if not db.talentProfiles[signature] then
+        db.talentProfiles[signature] = {}
+    end
+    EnsureProfileQueueSets(db.talentProfiles[signature], db.activeQueueSet)
 
     local switched = (db.activeTalentSignature ~= signature)
     db.activeTalentSignature = signature
-    db.queues = db.talentProfiles[signature].queues
+    db.queueSets = db.talentProfiles[signature].queueSets
+    db.activeQueueSet = db.talentProfiles[signature].activeQueueSet
+    db.queues = db.queueSets[db.activeQueueSet]
 
     if opts and opts.silent then return false end
     return switched
@@ -67,6 +112,7 @@ function ATS:OnTalentConfigurationChanged()
         end
         if self.PruneMissingFromQueues then self:PruneMissingFromQueues() end
         self:UpdateButtons()
+        if self.UpdateQueueSetButtons then self:UpdateQueueSetButtons() end
         if self.menu and self.menu:IsShown() then
             self:RefreshMenuNumbers()
             self:UpdateMenuCooldowns()

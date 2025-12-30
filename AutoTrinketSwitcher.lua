@@ -5,12 +5,36 @@ local ATS_MINIMAP_LOGO = "Interface\\AddOns\\AutoTrinketSwitcher\\Media\\AutoTri
 local LDB = LibStub and LibStub("LibDataBroker-1.1", true)
 local LDBIcon = LibStub and LibStub("LibDBIcon-1.0", true)
 
+local function NormalizeQueueSet(queue)
+    if not queue then queue = {} end
+    queue[13] = queue[13] or {}
+    queue[14] = queue[14] or {}
+    return queue
+end
+
 -- Ensure saved variables exist after they are loaded
 local function EnsureDB()
     AutoTrinketSwitcherCharDB = AutoTrinketSwitcherCharDB or {}
     local db = AutoTrinketSwitcherCharDB
 
-    db.queues = db.queues or { [13] = {}, [14] = {} }
+    db.queues = NormalizeQueueSet(db.queues or { [13] = {}, [14] = {} })
+    if db.queueSets then
+        db.queueSets[1] = NormalizeQueueSet(db.queueSets[1])
+        db.queueSets[2] = NormalizeQueueSet(db.queueSets[2])
+        if db.activeQueueSet ~= 1 and db.activeQueueSet ~= 2 then
+            db.activeQueueSet = 1
+        end
+        if db.queues and db.queueSets[db.activeQueueSet] ~= db.queues then
+            db.queueSets[db.activeQueueSet] = db.queues
+        end
+    else
+        db.queueSets = {
+            [1] = db.queues,
+            [2] = { [13] = {}, [14] = {} },
+        }
+        db.activeQueueSet = (db.activeQueueSet == 2) and 2 or 1
+    end
+    db.queues = db.queueSets[db.activeQueueSet]
     db.menuOnlyOutOfCombat = db.menuOnlyOutOfCombat ~= false
     db.autoSwitch = db.autoSwitch ~= false
     db.readyGlowEnabled = db.readyGlowEnabled ~= false
@@ -49,6 +73,13 @@ local function EnsureDB()
     if not db.mountOverrideActive then
         db.mountOverridePrevAutoSwitch = nil
     end
+end
+
+local function PlayerCanSwap()
+    if UnitIsDeadOrGhost and UnitIsDeadOrGhost("player") then return false end
+    if UnitIsDead and UnitIsDead("player") then return false end
+    if UnitIsGhost and UnitIsGhost("player") then return false end
+    return true
 end
 
 -- Sync the options panel 'Enable auto switching' checkbox (if present)
@@ -94,10 +125,53 @@ function ATS:SetGlobalAutoSwitch(enabled)
     self:UpdateOptionsAutoCheckbox()
 end
 
+function ATS:SetActiveQueueSet(index)
+    EnsureDB()
+    local db = AutoTrinketSwitcherCharDB
+    index = (index == 2) and 2 or 1
+    if db.activeQueueSet == index then return end
+
+    db.activeQueueSet = index
+    db.queues = db.queueSets[index]
+
+    if db.talentProfiles and db.activeTalentSignature then
+        local profile = db.talentProfiles[db.activeTalentSignature]
+        if profile then
+            profile.queueSets = db.queueSets
+            profile.activeQueueSet = db.activeQueueSet
+            profile.queues = db.queues
+        end
+    end
+
+    if self.menu and self.menu:IsShown() then
+        self:RefreshMenuNumbers()
+        self:UpdateMenuCooldowns()
+    end
+    if self.UpdateQueueSetButtons then self:UpdateQueueSetButtons() end
+    self:UpdateButtons()
+end
+
+function ATS:UpdateQueueSetButtons()
+    if not self.queueSetButtons then return end
+    local active = (AutoTrinketSwitcherCharDB and AutoTrinketSwitcherCharDB.activeQueueSet) or 1
+    for i, btn in ipairs(self.queueSetButtons) do
+        local isActive = (i == active)
+        if btn.text then
+            if isActive then
+                btn.text:SetTextColor(1, 0.82, 0, 1)
+            else
+                btn.text:SetTextColor(1, 1, 1, 1)
+            end
+        end
+        btn:SetAlpha(isActive and 1 or 0.7)
+    end
+end
+
 function ATS:RestoreManualTrinket(slot)
     EnsureDB()
     local db = AutoTrinketSwitcherCharDB
     if not db.manualPreferred then return end
+    if not PlayerCanSwap() then return end
 
     local itemID = db.manualPreferred[slot]
     if not itemID then return end
@@ -394,7 +468,7 @@ function ATS:PerformCheck()
         return
     end
 
-    if AutoTrinketSwitcherCharDB.autoSwitch and not InCombatLockdown() then
+    if AutoTrinketSwitcherCharDB.autoSwitch and not InCombatLockdown() and PlayerCanSwap() then
         local cand13 = ChooseCandidate(13)
         local cand14 = ChooseCandidate(14)
         if cand13 and cand14 and cand13 == cand14 then
@@ -587,7 +661,7 @@ function ATS:CreateButtons()
     -- Container frame around the buttons so players can see where to drag
     local template = BackdropTemplateMixin and "BackdropTemplate" or nil
     local frame = CreateFrame("Frame", "ATSButtons", UIParent, template)
-    frame:SetSize(84, 44)
+    frame:SetSize(84, 60)
     local pos = AutoTrinketSwitcherCharDB.buttonPos or {}
     frame:SetPoint(pos.point or "CENTER", UIParent, pos.relativePoint or "CENTER", pos.x or 0, pos.y or 0)
     frame:EnableMouse(not AutoTrinketSwitcherCharDB.lockWindows)
@@ -623,11 +697,24 @@ function ATS:CreateButtons()
         frame:Show()
     end
 
+    self.queueSetButtons = {}
+    for index = 1, 2 do
+        local btn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        btn:SetSize(36, 16)
+        btn:SetPoint("TOPLEFT", 4 + (index - 1) * 40, -4)
+        btn:SetText(tostring(index))
+        btn:SetNormalFontObject("GameFontNormalSmall")
+        btn:SetHighlightFontObject("GameFontHighlightSmall")
+        btn.text = btn:GetFontString()
+        btn:SetScript("OnClick", function() ATS:SetActiveQueueSet(index) end)
+        self.queueSetButtons[index] = btn
+    end
+
     for index, slot in ipairs({13, 14}) do
         -- Use a secure action button so activating the trinket does not taint
         local btn = CreateFrame("Button", nil, frame, "SecureActionButtonTemplate")
         btn:SetSize(36, 36)
-        btn:SetPoint("LEFT", 4 + (index - 1) * 40, 0)
+        btn:SetPoint("BOTTOMLEFT", 4 + (index - 1) * 40, 4)
 
         btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         btn:SetAttribute("type1", "macro")
@@ -708,6 +795,7 @@ function ATS:CreateButtons()
     self:ApplyColorSettings()
     self:UpdateCooldownFont()
     self:UpdateLockState()
+    self:UpdateQueueSetButtons()
 end
 
 -- Create a minimap button for quick toggles
