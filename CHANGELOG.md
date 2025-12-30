@@ -3,7 +3,7 @@ Changelog
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
-1.6 - 2025-12-30
+1.9.1 - 2025-12-30
 - Added two queue-set buttons to swap between two saved trinket rotations per talent profile. So if you change gear set you also can quickly change trinket rotation.
 - Prevent auto swapping or manual restore attempts while the player is dead or a ghost.
 
