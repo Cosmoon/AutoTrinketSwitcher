@@ -1,5 +1,25 @@
 local ATS = AutoTrinketSwitcherFrame
 
+local function NormalizeCooldown(start, duration, enable)
+    if type(start) == "table" then
+        local info = start
+        start = info.startTime or info.start or info[1] or 0
+        duration = info.duration or info[2] or 0
+        enable = info.isEnabled or info.enable or info[3]
+    end
+    return start or 0, duration or 0, enable
+end
+
+local function GetItemCooldownSafe(itemID)
+    if C_Item and C_Item.GetItemCooldown then
+        return NormalizeCooldown(C_Item.GetItemCooldown(itemID))
+    end
+    if GetItemCooldown then
+        return NormalizeCooldown(GetItemCooldown(itemID))
+    end
+    return 0, 0, 0
+end
+
 -- Scan bags and equipped slots for trinkets and return unique itemIDs
 local function ScanTrinkets()
     local trinkets, seen = {}, {}
@@ -187,7 +207,9 @@ function ATS:ShowMenu(anchor)
                 -- Equip clicked trinket only when switching from auto -> manual
                 if nowManual and not wasManual then
                     AutoTrinketSwitcherCharDB.manualPreferred[slot] = self.itemID or GetInventoryItemID("player", slot)
-                    if C_Item and C_Item.EquipItemByName then
+                    if ATS.EquipItemSafe then
+                        ATS:EquipItemSafe(self.itemID, slot)
+                    elseif C_Item and C_Item.EquipItemByName then
                         C_Item.EquipItemByName(self.itemID, slot)
                     else
                         EquipItemByName(self.itemID, slot)
@@ -206,33 +228,25 @@ function ATS:ShowMenu(anchor)
                 ATS:RefreshMenuNumbers()
             elseif not AutoTrinketSwitcherCharDB.autoSwitch then
                 local slot = mouse == "LeftButton" and 13 or 14
-                if C_Item and C_Item.EquipItemByName then
+                if ATS.EquipItemSafe then
+                    ATS:EquipItemSafe(self.itemID, slot)
+                elseif C_Item and C_Item.EquipItemByName then
                     C_Item.EquipItemByName(self.itemID, slot)
                 else
                     EquipItemByName(self.itemID, slot)
                 end
                 ATS:UpdateButtons()
-            elseif mouse == "RightButton" and AutoTrinketSwitcherCharDB.tooltipMode == "RIGHTCLICK" then
-                ATS.tooltipPinned = not ATS.tooltipPinned
-                if ATS.tooltipPinned then
-                    ATS:ShowItemTooltip(self, self.itemID)
-                else
-                    ATS:HideTooltip()
-                    ATS.tooltipContext = nil
-                end
             end
         end)
 
         btn:SetScript("OnEnter", function(self)
-            if AutoTrinketSwitcherCharDB.tooltipMode == "HOVER" or ATS.tooltipPinned then
+            if AutoTrinketSwitcherCharDB.tooltipMode ~= "OFF" then
                 ATS:ShowItemTooltip(self, self.itemID)
             end
         end)
         btn:SetScript("OnLeave", function()
-            if not ATS.tooltipPinned then
-                ATS:HideTooltip()
-                ATS.tooltipContext = nil
-            end
+            ATS:HideTooltip()
+            ATS.tooltipContext = nil
         end)
 
         self.menu.icons[i] = btn
@@ -339,7 +353,7 @@ end
 function ATS:UpdateMenuCooldowns()
     if not self.menu or not self.menu.icons then return end
     for _, btn in ipairs(self.menu.icons) do
-        local start, duration = GetItemCooldown(btn.itemID)
+        local start, duration = GetItemCooldownSafe(btn.itemID)
         if start and duration and start > 0 and duration > 0 then
             btn.cooldown:SetCooldown(start, duration)
             btn.cooldown:Show()

@@ -24,7 +24,7 @@ function ATS:GetTooltip()
             self.cleanTooltip = CreateFrame("GameTooltip", "ATS_CleanTooltip", UIParent, template)
             if self.cleanTooltip.HookScript then
                 self.cleanTooltip:HookScript("OnHide", function()
-                    if not ATS.tooltipPinned then ATS.tooltipContext = nil end
+                    ATS.tooltipContext = nil
                 end)
             end
         end

@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
+2.0.0 - 2026-01-15
+- Updated for Burning Crusade client compatibility (Interface 20505 + cooldown API normalization).
+- Fixed trinket button clicks to respect ActionButtonUseKeyDown.
+- Improved cooldown tracking to prevent swap oscillation and missing overlays.
+- Simplified tooltip option to a single "Show tooltips" checkbox (removed right-click mode).
+- Menu settings sliders now render a visible track in the options UI.
+
 1.9.1 - 2025-12-30
 - Added two queue-set buttons to swap between two saved trinket rotations per talent profile. So if you change gear set you also can quickly change trinket rotation.
 - Prevent auto swapping or manual restore attempts while the player is dead or a ghost.

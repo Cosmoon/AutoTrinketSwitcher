@@ -5,6 +5,74 @@ local ATS_MINIMAP_LOGO = "Interface\\AddOns\\AutoTrinketSwitcher\\Media\\AutoTri
 local LDB = LibStub and LibStub("LibDataBroker-1.1", true)
 local LDBIcon = LibStub and LibStub("LibDBIcon-1.0", true)
 
+local function NormalizeCooldown(start, duration, enable)
+    if type(start) == "table" then
+        local info = start
+        start = info.startTime or info.start or info[1] or 0
+        duration = info.duration or info[2] or 0
+        enable = info.isEnabled or info.enable or info[3]
+    end
+    return start or 0, duration or 0, enable
+end
+
+local function GetItemCooldownSafe(itemID)
+    if C_Item and C_Item.GetItemCooldown then
+        return NormalizeCooldown(C_Item.GetItemCooldown(itemID))
+    end
+    if GetItemCooldown then
+        return NormalizeCooldown(GetItemCooldown(itemID))
+    end
+    return 0, 0, 0
+end
+
+local function GetInventoryItemCooldownSafe(unit, slot)
+    if GetInventoryItemCooldown then
+        return NormalizeCooldown(GetInventoryItemCooldown(unit, slot))
+    end
+    local itemID = GetInventoryItemID and GetInventoryItemID(unit, slot)
+    if itemID then
+        return GetItemCooldownSafe(itemID)
+    end
+    return 0, 0, 0
+end
+
+local function EquipItemSafe(itemID, slot)
+    if not itemID then return end
+    if C_Item and C_Item.EquipItemByName then
+        C_Item.EquipItemByName(itemID, slot)
+        return
+    end
+    if EquipItemByName then
+        if type(itemID) == "number" then
+            EquipItemByName("item:" .. itemID, slot)
+        else
+            EquipItemByName(itemID, slot)
+        end
+    end
+end
+
+function ATS:EquipItemSafe(itemID, slot)
+    EquipItemSafe(itemID, slot)
+end
+
+local function UseActionKeyDown()
+    return GetCVar and GetCVar("ActionButtonUseKeyDown") == "1"
+end
+
+function ATS:GetTrinketClickBinding()
+    return UseActionKeyDown() and "LeftButtonDown" or "LeftButtonUp"
+end
+
+function ATS:UpdateTrinketClickBinding()
+    if not self.buttons then return end
+    local click = self:GetTrinketClickBinding()
+    for _, btn in pairs(self.buttons) do
+        if btn and btn.RegisterForClicks then
+            btn:RegisterForClicks(click)
+        end
+    end
+end
+
 local function NormalizeQueueSet(queue)
     if not queue then queue = {} end
     queue[13] = queue[13] or {}
@@ -46,7 +114,10 @@ local function EnsureDB()
     db.showCooldownNumbers = db.showCooldownNumbers ~= false
     db.largeNumbers = db.largeNumbers or false
     db.lockWindows = db.lockWindows or false
-    db.tooltipMode = db.tooltipMode or "HOVER"
+    db.tooltipMode = db.tooltipMode or "ON"
+    if db.tooltipMode ~= "OFF" then
+        db.tooltipMode = "ON"
+    end
     db.useDefaultTooltipAnchor = (db.useDefaultTooltipAnchor ~= false)
     db.tinyTooltips = db.tinyTooltips or false
     db.cleanTooltips = db.cleanTooltips or false
@@ -182,11 +253,7 @@ function ATS:RestoreManualTrinket(slot)
     local count = GetItemCount and GetItemCount(itemID, false) or 1
     if count == 0 then return end
 
-    if C_Item and C_Item.EquipItemByName then
-        C_Item.EquipItemByName(itemID, slot)
-    else
-        EquipItemByName(itemID, slot)
-    end
+    EquipItemSafe(itemID, slot)
 
     self.lastEquip = self.lastEquip or {}
     self.lastEquip[slot] = GetTime()
@@ -206,15 +273,41 @@ end
 -- Tooltip helpers moved to Tooltips.lua
 
 -- Utility: get remaining cooldown for an itemID
-local function GetItemRemaining(itemID)
-    if not itemID then return 0 end
-    local start, duration = GetItemCooldown(itemID)
-    if start == 0 or duration == 0 then
+local function GetCooldownRemaining(start, duration)
+    if not start or not duration or start == 0 or duration == 0 then
         return 0
     end
     local remaining = duration - (GetTime() - start)
     if remaining < 0 then remaining = 0 end
     return remaining
+end
+
+local function TrackItemCooldown(itemID, start, duration)
+    if not itemID or not start or not duration or start == 0 or duration == 0 then
+        return
+    end
+    ATS.itemCooldowns = ATS.itemCooldowns or {}
+    ATS.itemCooldowns[itemID] = { start = start, duration = duration }
+end
+
+local function GetTrackedItemRemaining(itemID)
+    if not itemID or not ATS.itemCooldowns then return 0 end
+    local info = ATS.itemCooldowns[itemID]
+    if not info then return 0 end
+    local remaining = GetCooldownRemaining(info.start, info.duration)
+    if remaining <= 0 then
+        ATS.itemCooldowns[itemID] = nil
+        return 0
+    end
+    return remaining
+end
+
+local function GetItemRemaining(itemID)
+    if not itemID then return 0 end
+    local start, duration = GetItemCooldownSafe(itemID)
+    local remaining = GetCooldownRemaining(start, duration)
+    if remaining > 0 then return remaining end
+    return GetTrackedItemRemaining(itemID)
 end
 
 -- Find index of an item within a queue (or large number if not present)
@@ -255,11 +348,8 @@ end
 local function SlotTrinketReady(slot)
     local itemID = GetInventoryItemID("player", slot)
     if not itemID or not ItemHasUse(itemID) then return false end
-    local start, duration = GetItemCooldown(itemID)
-    if not start or not duration then return false end
-    if start == 0 or duration == 0 then return true end
-    local remaining = start + duration - GetTime()
-    return remaining <= 0
+    local start, duration = GetInventoryItemCooldownSafe("player", slot)
+    return GetCooldownRemaining(start, duration) <= 0
 end
 
 -- If the top-priority item for a slot isn't ready, reserve the currently equipped
@@ -284,7 +374,8 @@ end
 local function ChooseCandidate(slot, avoidID)
     if AutoTrinketSwitcherCharDB.manual and AutoTrinketSwitcherCharDB.manual[slot] then return nil end
     local equippedID = GetInventoryItemID("player", slot)
-    local equippedCD = GetItemRemaining(equippedID)
+    local equippedStart, equippedDuration = GetInventoryItemCooldownSafe("player", slot)
+    local equippedCD = GetCooldownRemaining(equippedStart, equippedDuration)
     local equippedHasUse = ItemHasUse(equippedID)
 
     if equippedHasUse and IsItemEffectActive(equippedID) then
@@ -397,7 +488,8 @@ end
 -- Attempt to equip a trinket for a given slot based on the rules
 local function CheckSlot(slot)
     local equippedID = GetInventoryItemID("player", slot)
-    local equippedCD = GetItemRemaining(equippedID)
+    local equippedStart, equippedDuration = GetInventoryItemCooldownSafe("player", slot)
+    local equippedCD = GetCooldownRemaining(equippedStart, equippedDuration)
     local equippedHasUse = false
     if equippedID then
         local useName = GetItemSpell(equippedID)
@@ -415,11 +507,7 @@ local function CheckSlot(slot)
             local cd = GetItemRemaining(itemID)
             -- Trinket is ready to be swapped in if it has 30s or less cooldown remaining
             if cd <= 30 then
-                if C_Item and C_Item.EquipItemByName then
-                    C_Item.EquipItemByName(itemID, slot)
-                else
-                    EquipItemByName(itemID, slot)
-                end
+                EquipItemSafe(itemID, slot)
                 break
             end
         end
@@ -481,11 +569,7 @@ function ATS:PerformCheck()
                 allow = false
             end
             if allow then
-            if C_Item and C_Item.EquipItemByName then
-                C_Item.EquipItemByName(cand13, 13)
-            else
-                EquipItemByName(cand13, 13)
-            end
+            EquipItemSafe(cand13, 13)
             self.lastEquip = self.lastEquip or {}
             self.lastEquip[13] = GetTime()
             end
@@ -496,11 +580,7 @@ function ATS:PerformCheck()
                 allow = false
             end
             if allow then
-            if C_Item and C_Item.EquipItemByName then
-                C_Item.EquipItemByName(cand14, 14)
-            else
-                EquipItemByName(cand14, 14)
-            end
+            EquipItemSafe(cand14, 14)
             self.lastEquip = self.lastEquip or {}
             self.lastEquip[14] = GetTime()
             end
@@ -553,7 +633,8 @@ function ATS:UpdateButtons()
 
         -- Handle cooldown overlay and text
         if itemID then
-            local start, duration = GetItemCooldown(itemID)
+            local start, duration = GetInventoryItemCooldownSafe("player", slot)
+            TrackItemCooldown(itemID, start, duration)
             if start and duration and start > 0 and duration > 0 then
                 button.cooldown:SetCooldown(start, duration)
                 button.cooldown:Show()
@@ -716,9 +797,13 @@ function ATS:CreateButtons()
         btn:SetSize(36, 36)
         btn:SetPoint("BOTTOMLEFT", 4 + (index - 1) * 40, 4)
 
-        btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        btn:RegisterForClicks(self:GetTrinketClickBinding())
+        btn:EnableMouse(true)
+        local macroText = "/use " .. tostring(slot)
+        btn:SetAttribute("type", "macro")
         btn:SetAttribute("type1", "macro")
-        btn:SetAttribute("macrotext", "/use " .. slot)
+        btn:SetAttribute("macrotext", macroText)
+        btn:SetAttribute("macrotext1", macroText)
 
         btn.icon = btn:CreateTexture(nil, "BACKGROUND")
         btn.icon:SetAllPoints(true)
@@ -727,6 +812,7 @@ function ATS:CreateButtons()
         btn.cooldown = CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
         btn.cooldown:SetAllPoints(true)
         btn.cooldown:SetFrameLevel(btn:GetFrameLevel())
+        btn.cooldown:EnableMouse(false)
         btn.cooldown:SetDrawEdge(false)
         if btn.cooldown.SetHideCountdownNumbers then
             btn.cooldown:SetHideCountdownNumbers(true)
@@ -761,31 +847,17 @@ function ATS:CreateButtons()
         btn.manualBadge:Hide()
 
         btn.slot = slot
-        -- Use PostClick so the SecureActionButton's default OnClick handler still fires
-        btn:SetScript("PostClick", function(self, mouse)
-            if mouse == "RightButton" and AutoTrinketSwitcherCharDB.tooltipMode == "RIGHTCLICK" then
-                ATS.tooltipPinned = not ATS.tooltipPinned
-                if ATS.tooltipPinned then
-                    ATS:ShowTooltip(self, slot)
-                else
-                    ATS:HideTooltip()
-                    ATS.tooltipContext = nil
-                end
-            end
-        end)
 
         btn:SetScript("OnEnter", function(self)
             ATS:ShowMenu(btn)
-            if AutoTrinketSwitcherCharDB.tooltipMode == "HOVER" or ATS.tooltipPinned then
+            if AutoTrinketSwitcherCharDB.tooltipMode ~= "OFF" then
                 ATS:ShowTooltip(self, slot)
             end
         end)
         btn:SetScript("OnLeave", function()
             ATS:TryHideMenu()
-            if not ATS.tooltipPinned then
-                ATS:HideTooltip()
-                ATS.tooltipContext = nil
-            end
+            ATS:HideTooltip()
+            ATS.tooltipContext = nil
         end)
 
         self.buttons[slot] = btn
@@ -796,6 +868,7 @@ function ATS:CreateButtons()
     self:UpdateCooldownFont()
     self:UpdateLockState()
     self:UpdateQueueSetButtons()
+    self:UpdateTrinketClickBinding()
 end
 
 -- Create a minimap button for quick toggles
@@ -879,7 +952,6 @@ function ATS:PLAYER_LOGIN()
     self:CreateOptions()
     self:CreateButtons()
     self:CreateMinimapButton()
-    self.tooltipPinned = false
     self.elapsed = 0
     self.cdElapsed = 0
     self.mountAutoModified = false
@@ -900,7 +972,7 @@ function ATS:PLAYER_LOGIN()
     -- Clear tooltip context if tooltip is hidden by any external cause
     if GameTooltip and GameTooltip.HookScript then
         GameTooltip:HookScript("OnHide", function()
-            if not ATS.tooltipPinned then ATS.tooltipContext = nil end
+            ATS.tooltipContext = nil
         end)
     end
     -- Initialize mount state
@@ -952,7 +1024,6 @@ function ATS:PLAYER_LOGIN()
         bullet("Left-click: Use Trinket")
         bullet("Shift + Left/Right-Click: Add/Remove trinket to the priority queue (Left = slot 13, Right = slot 14)")
         bullet("Ctrl + Left/Right-Click: Equip AND toggle manual mode (Left = slot 13, Right = slot 14)")
-        bullet("Right-Click: Toggle pinned tooltip when tooltip mode is Right-Click")
         bullet("Slash: /ats clear 13 | 14 | both")
     end
 end
@@ -970,7 +1041,8 @@ ATS:RegisterEvent("MODIFIER_STATE_CHANGED")
 ATS:RegisterEvent("CHARACTER_POINTS_CHANGED")
 ATS:RegisterEvent("PLAYER_TALENT_UPDATE")
 ATS:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
-ATS:SetScript("OnEvent", function(self, event)
+ATS:RegisterEvent("CVAR_UPDATE")
+ATS:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_REGEN_ENABLED" then
         self:PerformCheck()
     elseif event == "UNIT_AURA" then
@@ -997,6 +1069,11 @@ ATS:SetScript("OnEvent", function(self, event)
         end
     elseif event == "PLAYER_TALENT_UPDATE" or event == "ACTIVE_TALENT_GROUP_CHANGED" then
         self:OnTalentConfigurationChanged()
+    elseif event == "CVAR_UPDATE" then
+        local cvar = ...
+        if cvar == "ActionButtonUseKeyDown" then
+            self:UpdateTrinketClickBinding()
+        end
     elseif self[event] then
         self[event](self)
     end

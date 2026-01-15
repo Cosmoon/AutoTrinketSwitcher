@@ -57,6 +57,38 @@ function ATS:CreateOptions()
         end)
         return cb
     end
+    local function CreateTooltipCheck(parent, label, anchor)
+        local cb = CreateFrame("CheckButton", nil, parent, "InterfaceOptionsCheckButtonTemplate")
+        cb.Text:SetText(label)
+        cb:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -8)
+        cb:SetChecked(db.tooltipMode ~= "OFF")
+        cb:SetScript("OnClick", function(self)
+            db.tooltipMode = self:GetChecked() and "ON" or "OFF"
+            if ATS.HideTooltip then ATS:HideTooltip() end
+            if ATS.RefreshTooltip then ATS:RefreshTooltip() end
+        end)
+        return cb
+    end
+
+    local function EnsureSliderTrack(slider)
+        if slider.atsTrack then return end
+        local track = slider:CreateTexture(nil, "ARTWORK")
+        track:SetTexture("Interface\\Buttons\\UI-SliderBar-Background")
+        track:SetHorizTile(true)
+        track:SetVertTile(false)
+        track:SetPoint("LEFT", slider, "LEFT", 10, 0)
+        track:SetPoint("RIGHT", slider, "RIGHT", -10, 0)
+        track:SetHeight(8)
+
+        local border = slider:CreateTexture(nil, "ARTWORK")
+        border:SetTexture("Interface\\Buttons\\UI-SliderBar-Border")
+        border:SetPoint("LEFT", track, "LEFT", -3, 0)
+        border:SetPoint("RIGHT", track, "RIGHT", 3, 0)
+        border:SetHeight(12)
+
+        slider.atsTrack = track
+        slider.atsBorder = border
+    end
 
     -- General settings box
     local generalBox, gHeader = CreateBox("General settings", title)
@@ -66,6 +98,7 @@ function ATS:CreateOptions()
     local g2 = CreateCheck(generalBox, "Show cooldown numbers", "showCooldownNumbers", gHeader)
     local g3 = CreateCheck(generalBox, "Use large cooldown numbers", "largeNumbers", gHeader)
     local g4 = CreateCheck(generalBox, "Lock windows", "lockWindows", gHeader)
+    local gTooltip = CreateTooltipCheck(generalBox, "Show tooltips", gHeader)
 
     -- New: default tooltip anchoring toggle
     local g5 = CreateCheck(generalBox, "Use default tooltip position", "useDefaultTooltipAnchor", gHeader)
@@ -84,33 +117,12 @@ function ATS:CreateOptions()
     PlaceCheck(g2, 1, 2)
     PlaceCheck(g3, 1, 3)
     PlaceCheck(g9, 1, 4)
-    PlaceCheck(g4, 2, 1)
+    PlaceCheck(g4, 1, 5)
+    PlaceCheck(gTooltip, 2, 1)
     PlaceCheck(g5, 2, 2)
     PlaceCheck(g6, 2, 3)
     PlaceCheck(g7, 2, 4)
     PlaceCheck(g8, 2, 5)
-
-    local tooltipLabel = generalBox:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    tooltipLabel:SetPoint("TOPLEFT", gHeader, "BOTTOMLEFT", gColLeftX, gRowY - 4 * 28 - 16)
-    tooltipLabel:SetText("Tooltips")
-
-    local tooltipDrop = CreateFrame("Frame", "ATSTooltipDropdown", generalBox, "UIDropDownMenuTemplate")
-    tooltipDrop:SetPoint("LEFT", tooltipLabel, "RIGHT", -10, -4)
-    local modes = {HOVER="Show", RIGHTCLICK="Right-click", OFF="Hide"}
-    UIDropDownMenu_SetWidth(tooltipDrop, 120)
-    UIDropDownMenu_Initialize(tooltipDrop, function(self, level)
-        for value, text in pairs(modes) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text, info.value = text, value
-            info.func = function()
-                db.tooltipMode = value
-                UIDropDownMenu_SetSelectedValue(tooltipDrop, value)
-            end
-            info.checked = db.tooltipMode == value
-            UIDropDownMenu_AddButton(info)
-        end
-    end)
-    UIDropDownMenu_SetSelectedValue(tooltipDrop, db.tooltipMode)
 
     -- menu-only-out-of-combat moved to Menu settings below
 
@@ -181,6 +193,7 @@ function ATS:CreateOptions()
     wrapSlider:SetValueStep(1)
     wrapSlider:SetObeyStepOnDrag(true)
     wrapSlider:SetWidth(200)
+    EnsureSliderTrack(wrapSlider)
     wrapSlider:SetValue(db.wrapAt)
     ATSWrapSliderLow:SetText("1")
     ATSWrapSliderHigh:SetText("30")
@@ -225,6 +238,7 @@ function ATS:CreateOptions()
     qSlider:SetValueStep(1)
     qSlider:SetObeyStepOnDrag(true)
     qSlider:SetWidth(200)
+    EnsureSliderTrack(qSlider)
     qSlider:SetValue(db.queueNumberSize or 12)
     _G[qSlider:GetName() .. "Low"]:SetText("8")
     _G[qSlider:GetName() .. "High"]:SetText("24")
@@ -303,15 +317,20 @@ function ATS:CreateOptions()
     -- Size boxes when shown to avoid anchoring parents to children
     panel:SetScript("OnShow", function()
         local function layout()
-            -- Compute bottom of General box: lowest of tooltip dropdown or last checkbox
-            local lastCheckBottom = (g8 and g8:GetBottom()) or (g7 and g7:GetBottom()) or (g6 and g6:GetBottom()) or nil
-            local tdb = tooltipDrop and tooltipDrop:GetBottom() or nil
-            local gBottom
-            if lastCheckBottom and tdb then
-                gBottom = math.min(lastCheckBottom, tdb)
-            else
-                gBottom = lastCheckBottom or tdb or (gHeader:GetBottom() - 60)
+            -- Compute bottom of General box: lowest checkbox
+            local function lowestBottom(...)
+                local bottom
+                for i = 1, select("#", ...) do
+                    local obj = select(i, ...)
+                    local b = obj and obj.GetBottom and obj:GetBottom() or nil
+                    if b and (not bottom or b < bottom) then
+                        bottom = b
+                    end
+                end
+                return bottom
             end
+            local gBottom = lowestBottom(g1, g2, g3, g4, g5, g6, g7, g8, g9, gTooltip)
+            if not gBottom then gBottom = (gHeader:GetBottom() - 60) end
             generalBox:SetHeight(generalBox:GetTop() - gBottom + 16)
 
             -- Wrap dir button uses its static anchor next to wrap slider.
