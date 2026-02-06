@@ -3,6 +3,11 @@ Changelog
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
+2.0.1 - 2026-02-06
+- Fixed talent-profile keying so dual-spec switches no longer jump to empty queues or appear to "delete" saved rotations.
+- Added safer active spec-group detection across Classic/BCC API variants to keep primary/secondary profiles separated correctly.
+- Added profile recovery fallback: when a newly selected profile is empty, ATS now reuses existing non-empty queues (sibling spec or previous active profile).
+
 2.0.0 - 2026-01-15
 - Updated for Burning Crusade client compatibility (Interface 20505 + cooldown API normalization).
 - Fixed trinket button clicks to respect ActionButtonUseKeyDown.

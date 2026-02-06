@@ -944,6 +944,50 @@ function ATS:CreateMinimapButton()
 end
 
 function ATS:PLAYER_LOGIN()
+    local function ReadActiveTalentGroup()
+        local function pick(...)
+            for i = 1, select("#", ...) do
+                local v = tonumber(select(i, ...))
+                if v and v >= 1 then
+                    return math.floor(v)
+                end
+            end
+            return nil
+        end
+
+        if type(GetActiveTalentGroup) == "function" then
+            local okA, a1, a2, a3 = pcall(GetActiveTalentGroup, false, false)
+            if okA then
+                local g = pick(a1, a2, a3)
+                if g then return g end
+            end
+            local okB, b1, b2, b3 = pcall(GetActiveTalentGroup)
+            if okB then
+                local g = pick(b1, b2, b3)
+                if g then return g end
+            end
+        end
+
+        if type(GetActiveSpecGroup) == "function" then
+            local okC, c1, c2, c3 = pcall(GetActiveSpecGroup)
+            if okC then
+                local g = pick(c1, c2, c3)
+                if g then return g end
+            end
+        end
+
+        if type(C_SpecializationInfo) == "table" and type(C_SpecializationInfo.GetActiveSpecGroup) == "function" then
+            local okD, d1, d2, d3 = pcall(C_SpecializationInfo.GetActiveSpecGroup)
+            if okD then
+                local g = pick(d1, d2, d3)
+                if g then return g end
+            end
+        end
+
+        return nil
+    end
+
+    self.lastKnownTalentGroup = ReadActiveTalentGroup() or self.lastKnownTalentGroup
     EnsureDB()
     -- Initialize or attach to the talent-based profile for the current build
     self:SyncActiveTalentProfile({ silent = true })
@@ -1041,6 +1085,7 @@ ATS:RegisterEvent("MODIFIER_STATE_CHANGED")
 ATS:RegisterEvent("CHARACTER_POINTS_CHANGED")
 ATS:RegisterEvent("PLAYER_TALENT_UPDATE")
 ATS:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
+ATS:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 ATS:RegisterEvent("CVAR_UPDATE")
 ATS:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_REGEN_ENABLED" then
@@ -1067,8 +1112,20 @@ ATS:SetScript("OnEvent", function(self, event, ...)
             -- Fallback without timers
             ATS:OnTalentConfigurationChanged()
         end
-    elseif event == "PLAYER_TALENT_UPDATE" or event == "ACTIVE_TALENT_GROUP_CHANGED" then
-        self:OnTalentConfigurationChanged()
+    elseif event == "PLAYER_TALENT_UPDATE" or event == "ACTIVE_TALENT_GROUP_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" then
+        local arg1, arg2 = ...
+        if event == "ACTIVE_TALENT_GROUP_CHANGED" then
+            local currentGroup = tonumber(arg1)
+            local previousGroup = tonumber(arg2)
+            if currentGroup and currentGroup >= 1 then
+                self.lastKnownTalentGroup = currentGroup
+            elseif previousGroup and previousGroup >= 1 then
+                self.lastKnownTalentGroup = previousGroup
+            end
+        end
+        if event ~= "PLAYER_SPECIALIZATION_CHANGED" or arg1 == nil or arg1 == "player" then
+            self:OnTalentConfigurationChanged()
+        end
     elseif event == "CVAR_UPDATE" then
         local cvar = ...
         if cvar == "ActionButtonUseKeyDown" then
