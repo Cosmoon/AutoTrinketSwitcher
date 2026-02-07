@@ -369,8 +369,8 @@ local function GetReservationForSlot(slot)
     return nil
 end
 
--- Choose the first ready trinket for a slot, respecting manual mode and current item cooldown rule,
--- but allowing an upgrade to a higher-priority ready trinket even if the equipped usable trinket is near ready.
+-- Choose the highest-priority ready trinket for a slot, then return a swap target only when
+-- it differs from the currently equipped item (so passive-only queues stay stable).
 local function ChooseCandidate(slot, avoidID)
     if AutoTrinketSwitcherCharDB.manual and AutoTrinketSwitcherCharDB.manual[slot] then return nil end
     local equippedID = GetInventoryItemID("player", slot)
@@ -389,7 +389,7 @@ local function ChooseCandidate(slot, avoidID)
     local otherSlot = (slot == 13) and 14 or 13
     local reservedOther = GetReservationForSlot(otherSlot)
     for i, itemID in ipairs(queue) do
-        if itemID ~= equippedID and itemID ~= avoidID and itemID ~= reservedOther then
+        if itemID ~= avoidID and itemID ~= reservedOther then
             local allowed = true
             -- Skip items not in bags/equipped
             local count = GetItemCount and GetItemCount(itemID, false) or 1
@@ -404,6 +404,11 @@ local function ChooseCandidate(slot, avoidID)
         end
     end
     if not targetID then return nil end
+
+    -- If the equipped trinket is already the highest-priority ready option, keep it.
+    if targetID == equippedID then
+        return nil
+    end
 
     -- Apply "don't swap off a near-ready usable trinket" unless the target has strictly higher priority
     if equippedHasUse and equippedCD <= 30 then

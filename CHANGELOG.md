@@ -3,6 +3,9 @@ Changelog
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
+2.0.2 - 2026-02-07
+- Fixed passive-only queue oscillation in the same slot: ATS now keeps the highest-priority ready trinket equipped instead of bouncing between passive entries.
+
 2.0.1 - 2026-02-06
 - Fixed talent-profile keying so dual-spec switches no longer jump to empty queues or appear to "delete" saved rotations.
 - Added safer active spec-group detection across Classic/BCC API variants to keep primary/secondary profiles separated correctly.
