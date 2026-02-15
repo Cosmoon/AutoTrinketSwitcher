@@ -150,6 +150,9 @@ local function PlayerCanSwap()
     if UnitIsDeadOrGhost and UnitIsDeadOrGhost("player") then return false end
     if UnitIsDead and UnitIsDead("player") then return false end
     if UnitIsGhost and UnitIsGhost("player") then return false end
+    if UnitCastingInfo and UnitCastingInfo("player") then return false end
+    if UnitChannelInfo and UnitChannelInfo("player") then return false end
+    if SpellIsTargeting and SpellIsTargeting() then return false end
     return true
 end
 
@@ -243,6 +246,7 @@ function ATS:RestoreManualTrinket(slot)
     local db = AutoTrinketSwitcherCharDB
     if not db.manualPreferred then return end
     if not PlayerCanSwap() then return end
+    if InCombatLockdown and InCombatLockdown() then return end
 
     local itemID = db.manualPreferred[slot]
     if not itemID then return end
@@ -257,6 +261,18 @@ function ATS:RestoreManualTrinket(slot)
 
     self.lastEquip = self.lastEquip or {}
     self.lastEquip[slot] = GetTime()
+end
+
+function ATS:RestoreManualSlots()
+    EnsureDB()
+    local db = AutoTrinketSwitcherCharDB
+    if not db.manual then return end
+
+    for _, slot in ipairs({13, 14}) do
+        if db.manual[slot] then
+            self:RestoreManualTrinket(slot)
+        end
+    end
 end
 
 -- Called after a per-slot manual toggle to keep global in sync
@@ -1193,6 +1209,19 @@ function ATS:UpdateMountState()
             refreshOptions = true
             -- Guard against immediate rapid swaps after dismount
             self.resumeGuardUntil = GetTime() + 1.5
+        end
+
+        -- Re-assert manual selections after dismount, including a delayed retry
+        -- to handle race conditions with other addons that swap mount-speed trinkets.
+        if prevMounted and not mounted then
+            self:RestoreManualSlots()
+            if C_Timer and C_Timer.After then
+                C_Timer.After(0.35, function()
+                    if ATS and ATS.isMounted then return end
+                    if ATS and ATS.RestoreManualSlots then ATS:RestoreManualSlots() end
+                    if ATS and ATS.UpdateButtons then ATS:UpdateButtons() end
+                end)
+            end
         end
     end
 

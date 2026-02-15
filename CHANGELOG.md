@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
+2.0.3 - 2026-02-15
+- Fixed manual-slot recovery after mount mode: if another addon equips a speed trinket while mounted, ATS now restores the saved manual trinket on dismount.
+- Added a short delayed re-check after dismount to handle addon swap race conditions more reliably.
+- Manual restore now skips equip attempts during combat lockdown.
+- Auto swapping now pauses while the player is busy (casting/channeling/targeting), preventing repeated failed equip attempts and warning spam while crafting.
+
 2.0.2 - 2026-02-07
 - Fixed passive-only queue oscillation in the same slot: ATS now keeps the highest-priority ready trinket equipped instead of bouncing between passive entries.
 
