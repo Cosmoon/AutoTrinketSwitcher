@@ -286,7 +286,7 @@ local function EnsureDB()
     db.queues = db.queueSets[db.activeQueueSet]
     db.menuOnlyOutOfCombat = db.menuOnlyOutOfCombat ~= false
     db.autoSwitch = db.autoSwitch ~= false
-    db.useMountSpeedManager = db.useMountSpeedManager == true
+    db.useMountSpeedManager = db.useMountSpeedManager ~= false
     db.readyGlowEnabled = db.readyGlowEnabled ~= false
 
     if db.showCooldowns ~= nil and db.showCooldownNumbers == nil then

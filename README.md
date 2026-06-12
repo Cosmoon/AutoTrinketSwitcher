@@ -42,7 +42,7 @@ Slash commands
 Notes & tips
 - Auto switching only happens out of combat; the glow hint is shown in combat when a swap will be possible soon.
 - The menu can be configured to appear only out of combat.
-- Optional mount-speed manager support covers Carrot on a Stick, Riding Crop, gloves with Riding Skill, and boots with Mithril Spurs. It is off by default; when disabled, ATS uses the old 1.5s resume guard after dismount.
+- Optional mount-speed manager support covers Carrot on a Stick, Riding Crop, gloves with Riding Skill, and boots with Mithril Spurs. It is on by default; when disabled, ATS uses the old 1.5s resume guard after dismount.
  - Optional: When using tiny tooltips, enable "Hold ALT for full tooltips" in General settings to see full item tooltips while holding ALT on hover (slots and menu).
  - Optional: Enable "Block other addon info in tooltips" to show trinket tooltips using an isolated tooltip that most addons won't modify.
 

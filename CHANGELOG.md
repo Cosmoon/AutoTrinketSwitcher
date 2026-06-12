@@ -4,9 +4,9 @@ Changelog
 All notable changes to AutoTrinketSwitcher are documented here.
 
 Unreleased
-- Added optional mount-speed gear management: ATS can equip Carrot on a Stick, Riding Crop, Riding Skill gloves, and Mithril Spurs boots from bags while mounted.
-- Restores the previously equipped trinkets, gloves, and boots immediately on dismount when the mount-speed manager is enabled.
-- Added a General settings toggle for the mount-speed manager; it defaults off to keep the previous mounted auto-switch suppression and 1.5s resume guard.
+- Added mount-speed gear management: ATS can equip Carrot on a Stick, Riding Crop, Riding Skill gloves, and Mithril Spurs boots from bags while mounted.
+- Restores the previously equipped trinkets, gloves, and boots immediately on dismount when the mount-speed manager is enabled. Much faster switching back to deafault gear. Works when dismounting using ability's.
+- Added a General settings toggle for the mount-speed manager; it defaults on, and disabling it restores the previous mounted auto-switch suppression.
 
 2.0.3 - 2026-02-15
 - Fixed manual-slot recovery after mount mode: if another addon equips a speed trinket while mounted, ATS now restores the saved manual trinket on dismount.
