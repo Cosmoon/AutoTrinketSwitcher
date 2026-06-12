@@ -4,12 +4,12 @@ AutoTrinketSwitcher
 
 What it does
 - Auto switch: Out of combat, equips the highest-priority ready trinket for each slot.
-- Preemptive return: When your top priority becomes ìswitch-readyî (=30s), it preempts lower priority.
+- Preemptive return: When your top priority becomes ‚Äúswitch-ready‚Äù (=30s), it preempts lower priority.
 - Cross-slot coordination: If both slots want the same trinket, slot 13 gets it; slot 14 takes the next ready item.
-- Passive trinkets: Passive items donít block swaps; usable trinkets only block if theyíll be ready in =30s.
-- Mount handling: Auto switching disables while mounted; an optional mount-speed manager can equip speed gear from your bags and restore your previous gear on dismount.
+- Passive trinkets: Passive items don‚Äôt block swaps; usable trinkets only block if they‚Äôll be ready in =30s.
+- Mount handling: AutoTrinketSwitcher has a mount-speed gear management system. It can equip Carrot on a Stick, Riding Crop, Riding Skill gloves, and Mithril Spurs boots from bags while mounted. Toggeling Manual Mode will disable trinket switching but still changes gloves and boots when available. You can disable this in the option menu. (Default on)
 - Glow hint: In combat, a slot glows if a queued trinket will be ready in =35s.
-- Manual badge: An ìMî appears on a slot when manual mode is active or when auto switching is OFF globally.
+- Manual badge: An ‚ÄúM‚Äù appears on a slot when manual mode is active or when auto switching is OFF globally.
 
 In-game usage
 - Minimap button:
@@ -24,15 +24,15 @@ In-game usage
 - Trinket menu (shows all your trinkets, bag + equipped):
   - Shift-Click: Add/Remove trinket to the priority queue of the clicked slot (Left = slot 13, Right = slot 14)
   - Ctrl-Click: Equip in slot AND toggle manual mode for slot (Left = slot 13, Right = slot 14) or toggle auto queue
-- Manual mode ìMî badge:
+- Manual mode ‚ÄúM‚Äù badge:
   - Shown on a slot when that slot is manual, or when auto switching is OFF.
   - Manual slots are never auto-swapped.
 
 Priority rules (summary)
-- Each slot has its own queue (1 = highest). The first ready (=30s) item in a slotís queue is chosen.
+- Each slot has its own queue (1 = highest). The first ready (=30s) item in a slot‚Äôs queue is chosen.
 - If both slots want the same item, slot 13 wins; slot 14 tries its next choice.
-- While your slotís top priority isnít ready, the currently equipped item for that slot is reserved so the other slot wonít steal it.
-- Usable items near ready (=30s) wonít be swapped off unless the incoming trinket is higher priority for that slot.
+- While your slot‚Äôs top priority isn‚Äôt ready, the currently equipped item for that slot is reserved so the other slot won‚Äôt steal it.
+- Usable items near ready (=30s) won‚Äôt be swapped off unless the incoming trinket is higher priority for that slot.
 
 Slash commands
 - /ats: Show quick help
@@ -48,7 +48,7 @@ Notes & tips
 
 Talent-based queues
 - Tracks separate trinket queues per talent build (Classic trees).
-- When you change talents, ATS automatically switches to that buildís dedicated pair of queues (slot 13 and 14).
+- When you change talents, ATS automatically switches to that build‚Äôs dedicated pair of queues (slot 13 and 14).
 - On first run, your current queues are migrated to the current build; new builds start with empty queues.
 - Per-character, saved automatically; no extra setup required.
 
