@@ -9,6 +9,8 @@ Libs\LibDBIcon-1.0\lib.xml
 ## SavedVariablesPerCharacter: AutoTrinketSwitcherCharDB
 ## IconTexture: Interface\AddOns\AutoTrinketSwitcher\Media\AutoTrinketSwitche_Logo.blp
 AutoTrinketSwitcher.lua
+MountSpeed.lua
+Minimap.lua
 Tooltips.lua
 Profiles.lua
 Menu.lua
