@@ -312,6 +312,8 @@ function ATS:CreateOptions()
     c4:ClearAllPoints(); c4:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 508, -8)
     local c5 = CreateColorOption(colorBox, "Ready glow", "readyGlow", cHeader, -48)
     c5:ClearAllPoints(); c5:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 16, -48)
+    local c6 = CreateColorOption(colorBox, "Speed off", "speedBadge", cHeader, -48)
+    c6:ClearAllPoints(); c6:SetPoint("TOPLEFT", cHeader, "BOTTOMLEFT", 180, -48)
 
     -- Spacer below colour box to guarantee visual padding to the window edge
     local bottomSpacer = CreateFrame("Frame", nil, panel)
@@ -349,7 +351,7 @@ function ATS:CreateOptions()
             if mBottom == 0 then mBottom = (mHeader:GetBottom() - 60) end
             menuBox:SetHeight(menuBox:GetTop() - mBottom + 40)
 
-            local last = c5 or c4 or c3
+            local last = c6 or c5 or c4 or c3
             colorBox:SetHeight(colorBox:GetTop() - last:GetBottom() + 24)
         end
 

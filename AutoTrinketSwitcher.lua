@@ -236,6 +236,40 @@ local function MarkMountSpeedEquip(slot)
     ATS.lastEquip[slot] = GetTime()
 end
 
+local function MountSpeedHasPrevious(previous)
+    if not previous then return false end
+    for _, slot in ipairs(MOUNT_SPEED_RESTORE_SLOTS) do
+        if previous[slot] ~= nil then
+            return true
+        end
+    end
+    return false
+end
+
+local function RestoreMountSpeedSlots(db, slots)
+    local previous = db.mountSpeedPrevious or {}
+    for _, slot in ipairs(slots) do
+        local target = previous[slot]
+        if target and target ~= false then
+            local targetID = GetItemIDFromLinkOrID(target)
+            local currentID = GetInventoryItemID("player", slot)
+            if not targetID or currentID ~= targetID then
+                EquipItemSafe(target, slot)
+                MarkMountSpeedEquip(slot)
+            end
+        end
+        previous[slot] = nil
+    end
+
+    if MountSpeedHasPrevious(previous) then
+        db.mountSpeedPrevious = previous
+        db.mountSpeedActive = true
+    else
+        db.mountSpeedPrevious = nil
+        db.mountSpeedActive = false
+    end
+end
+
 local function UseActionKeyDown()
     return GetCVar and GetCVar("ActionButtonUseKeyDown") == "1"
 end
@@ -287,6 +321,7 @@ local function EnsureDB()
     db.menuOnlyOutOfCombat = db.menuOnlyOutOfCombat ~= false
     db.autoSwitch = db.autoSwitch ~= false
     db.useMountSpeedManager = db.useMountSpeedManager ~= false
+    db.mountSpeedTrinketsEnabled = db.mountSpeedTrinketsEnabled ~= false
     db.readyGlowEnabled = db.readyGlowEnabled ~= false
 
     if db.showCooldowns ~= nil and db.showCooldownNumbers == nil then
@@ -311,6 +346,7 @@ local function EnsureDB()
     db.colors.slot14 = db.colors.slot14 or { r = 1, g = 0.82, b = 0 }
     db.colors.glow   = db.colors.glow   or { r = 1, g = 1, b = 0 }
     db.colors.manualBadge = db.colors.manualBadge or { r = 1, g = 1, b = 1 }
+    db.colors.speedBadge = db.colors.speedBadge or { r = 0, g = 0.8, b = 1 }
     db.colors.readyGlow = db.colors.readyGlow or { r = 1, g = 1, b = 1 }
 
     db.buttonPos = db.buttonPos or { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 }
@@ -470,29 +506,32 @@ function ATS:EquipMountSpeedGear()
 
     local db = AutoTrinketSwitcherCharDB
     local changed = false
-    local equippedSpeedTrinkets = {}
-    local targetTrinketSlots = {}
 
-    for _, slot in ipairs(MOUNT_SPEED_TRINKET_SLOTS) do
-        local itemID = GetInventoryItemID("player", slot)
-        if MOUNT_SPEED_TRINKET_IDS[itemID] then
-            equippedSpeedTrinkets[itemID] = true
-        elseif not (db.manual and db.manual[slot]) then
-            table.insert(targetTrinketSlots, slot)
+    if db.mountSpeedTrinketsEnabled ~= false then
+        local equippedSpeedTrinkets = {}
+        local targetTrinketSlots = {}
+
+        for _, slot in ipairs(MOUNT_SPEED_TRINKET_SLOTS) do
+            local itemID = GetInventoryItemID("player", slot)
+            if MOUNT_SPEED_TRINKET_IDS[itemID] then
+                equippedSpeedTrinkets[itemID] = true
+            else
+                table.insert(targetTrinketSlots, slot)
+            end
         end
-    end
 
-    for _, trinket in ipairs(MOUNT_SPEED_TRINKETS) do
-        if not equippedSpeedTrinkets[trinket.itemID] and #targetTrinketSlots > 0 then
-            local item = FindBagItemByID(trinket.itemID)
-            if item then
-                local slot = table.remove(targetTrinketSlots, 1)
-                SaveMountSpeedPrevious(db, slot)
-                db.mountSpeedActive = true
-                EquipItemSafe(item.link or item.itemID, slot)
-                MarkMountSpeedEquip(slot)
-                equippedSpeedTrinkets[trinket.itemID] = true
-                changed = true
+        for _, trinket in ipairs(MOUNT_SPEED_TRINKETS) do
+            if not equippedSpeedTrinkets[trinket.itemID] and #targetTrinketSlots > 0 then
+                local item = FindBagItemByID(trinket.itemID)
+                if item then
+                    local slot = table.remove(targetTrinketSlots, 1)
+                    SaveMountSpeedPrevious(db, slot)
+                    db.mountSpeedActive = true
+                    EquipItemSafe(item.link or item.itemID, slot)
+                    MarkMountSpeedEquip(slot)
+                    equippedSpeedTrinkets[trinket.itemID] = true
+                    changed = true
+                end
             end
         end
     end
@@ -521,22 +560,40 @@ function ATS:RestoreMountSpeedGear()
     if not PlayerCanSwap() then return false end
     if InCombatLockdown and InCombatLockdown() then return false end
 
-    local previous = db.mountSpeedPrevious or {}
-    for _, slot in ipairs(MOUNT_SPEED_RESTORE_SLOTS) do
-        local target = previous[slot]
-        if target and target ~= false then
-            local targetID = GetItemIDFromLinkOrID(target)
-            local currentID = GetInventoryItemID("player", slot)
-            if not targetID or currentID ~= targetID then
-                EquipItemSafe(target, slot)
-                MarkMountSpeedEquip(slot)
-            end
+    RestoreMountSpeedSlots(db, MOUNT_SPEED_RESTORE_SLOTS)
+    return true
+end
+
+function ATS:RestoreMountSpeedTrinkets()
+    EnsureDB()
+    local db = AutoTrinketSwitcherCharDB
+    if not db.mountSpeedPrevious then return true end
+    if not PlayerCanSwap() then return false end
+    if InCombatLockdown and InCombatLockdown() then return false end
+
+    RestoreMountSpeedSlots(db, MOUNT_SPEED_TRINKET_SLOTS)
+    return true
+end
+
+function ATS:SetMountSpeedTrinketSwitching(enabled)
+    EnsureDB()
+    local db = AutoTrinketSwitcherCharDB
+    db.mountSpeedTrinketsEnabled = not not enabled
+
+    if db.mountSpeedTrinketsEnabled then
+        if self.isMounted and db.useMountSpeedManager and self.EquipMountSpeedGear then
+            self:EquipMountSpeedGear()
         end
+    elseif self.RestoreMountSpeedTrinkets then
+        self:RestoreMountSpeedTrinkets()
     end
 
-    db.mountSpeedActive = false
-    db.mountSpeedPrevious = nil
-    return true
+    if self.UpdateButtons then self:UpdateButtons() end
+end
+
+function ATS:ToggleMountSpeedTrinketSwitching()
+    EnsureDB()
+    self:SetMountSpeedTrinketSwitching(not AutoTrinketSwitcherCharDB.mountSpeedTrinketsEnabled)
 end
 
 function ATS:OnMountSpeedManagerOptionChanged(enabled)
@@ -757,6 +814,10 @@ function ATS:ApplyColorSettings()
             local mb = AutoTrinketSwitcherCharDB.colors.manualBadge
             button.manualBadge:SetTextColor(mb.r, mb.g, mb.b, 1)
         end
+        if button.speedBadge then
+            local sb = AutoTrinketSwitcherCharDB.colors.speedBadge
+            button.speedBadge:SetTextColor(sb.r, sb.g, sb.b, 1)
+        end
     end
 end
 
@@ -932,6 +993,14 @@ function ATS:UpdateButtons()
             if isManualSlot then button.manualBadge:Show() else button.manualBadge:Hide() end
         end
 
+        if button.speedBadge then
+            if AutoTrinketSwitcherCharDB.mountSpeedTrinketsEnabled == false then
+                button.speedBadge:Show()
+            else
+                button.speedBadge:Hide()
+            end
+        end
+
         -- Handle cooldown overlay and text
         if itemID then
             local start, duration = GetInventoryItemCooldownSafe("player", slot)
@@ -973,7 +1042,9 @@ end
 function ATS:OnMinimapClick(mouse)
     EnsureDB()
     if mouse == "LeftButton" then
-        if self.buttonFrame then
+        if IsAltKeyDown() then
+            self:ToggleMountSpeedTrinketSwitching()
+        elseif self.buttonFrame then
             if self.buttonFrame:IsShown() then
                 self.buttonFrame:Hide()
                 AutoTrinketSwitcherCharDB.buttonFrameHidden = true
@@ -1014,6 +1085,7 @@ function ATS:OnMinimapTooltipShow(tooltip)
         return "|c"..WHITE..label.."|r |c"..GOLD..text.."|r"
     end
     tooltip:AddLine(line("Left-Click:", "Show/Hide Trinkets"))
+    tooltip:AddLine(line("Alt + Left-Click:", "Toggle Mount-Speed Trinkets"))
     tooltip:AddLine(line("Right-Click:", "Open Option Menu"))
     tooltip:AddLine(line("Shift+ Right-Click:", "Lock/Unlock Buttons"))
     tooltip:AddLine(line("Ctrl + Right-Click:", "Toggle Auto Switching"))
@@ -1146,6 +1218,13 @@ function ATS:CreateButtons()
         btn.manualBadge:SetTextColor(1, 1, 1, 1)
         btn.manualBadge:SetDrawLayer("OVERLAY", 8)
         btn.manualBadge:Hide()
+
+        btn.speedBadge = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        btn.speedBadge:SetPoint("BOTTOMRIGHT", -2, 2)
+        btn.speedBadge:SetText("S")
+        btn.speedBadge:SetTextColor(0, 0.8, 1, 1)
+        btn.speedBadge:SetDrawLayer("OVERLAY", 8)
+        btn.speedBadge:Hide()
 
         btn.slot = slot
 
@@ -1475,8 +1554,13 @@ function ATS:UpdateMountState()
             refreshOptions = true
         end
 
-        if db.useMountSpeedManager and self:EquipMountSpeedGear() then
-            refreshButtons = true
+        if db.useMountSpeedManager then
+            if db.mountSpeedTrinketsEnabled == false and db.mountSpeedPrevious and self:RestoreMountSpeedTrinkets() then
+                refreshButtons = true
+            end
+            if self:EquipMountSpeedGear() then
+                refreshButtons = true
+            end
         elseif not db.useMountSpeedManager and (db.mountSpeedActive or db.mountSpeedPrevious) and self:RestoreMountSpeedGear() then
             refreshButtons = true
         end

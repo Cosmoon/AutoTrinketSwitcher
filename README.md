@@ -10,10 +10,12 @@ What it does
 - Mount handling: Auto switching disables while mounted; an optional mount-speed manager can equip speed gear from your bags and restore your previous gear on dismount.
 - Glow hint: In combat, a slot glows if a queued trinket will be ready in =35s.
 - Manual badge: An “M” appears on a slot when manual mode is active or when auto switching is OFF globally.
+- Speed badge: An “S” appears when mount-speed trinket swapping is disabled.
 
 In-game usage
 - Minimap button:
   - Left-Click: Show/Hide Trinkets window
+  - Alt+Left-Click: Toggle mount-speed trinket swapping
   - Right-Click: Open/Close Options window
   - Shift+Right-Click: Lock/Unlock Buttons
   - Ctrl+Right-Click: Toggle Auto Switching
