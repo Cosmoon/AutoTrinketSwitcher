@@ -7,8 +7,8 @@ Unreleased
 - Added mount-speed gear management: ATS can equip Carrot on a Stick, Riding Crop, Riding Skill gloves, and Mithril Spurs boots from bags while mounted.
 - Restores the previously equipped trinkets, gloves, and boots immediately on dismount when the mount-speed manager is enabled. Much faster switching back to deafault gear. Works when dismounting using ability's.
 - Added a General settings toggle for the mount-speed manager; it defaults on, and disabling it restores the previous mounted auto-switch suppression.
-- Mount-speed trinket swaps now ignore Manual Mode; use Alt + Left-Click on the minimap button to disable only Carrot/Riding Crop swaps while keeping normal auto-switching active.
-- Added Alt + Left-Click on the minimap button to toggle only mount-speed trinket swapping; when disabled, an S badge appears on the trinket buttons.
+- Mount-speed trinket swaps now ignore Manual Mode; use Alt + Right-Click on the minimap button to disable only Carrot/Riding Crop swaps while keeping normal auto-switching active.
+- Added Alt + Right-Click on the minimap button to toggle only mount-speed trinket swapping; when disabled, an S badge appears on the trinket buttons.
 - Added a configurable colour for the S badge.
 
 2.0.3 - 2026-02-15

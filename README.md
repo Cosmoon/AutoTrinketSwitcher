@@ -19,7 +19,7 @@ What it does
 In-game usage
 - Minimap button:
   - Left-Click: Show/Hide Trinkets window
-  - Alt+Left-Click: Toggle mount-speed trinket swapping
+  - Alt+Right-Click: Toggle mount-speed trinket swapping
   - Right-Click: Open/Close Options window
   - Shift+Right-Click: Lock/Unlock Buttons
   - Ctrl+Right-Click: Toggle Auto Switching

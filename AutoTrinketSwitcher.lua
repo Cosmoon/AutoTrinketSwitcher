@@ -1042,9 +1042,7 @@ end
 function ATS:OnMinimapClick(mouse)
     EnsureDB()
     if mouse == "LeftButton" then
-        if IsAltKeyDown() then
-            self:ToggleMountSpeedTrinketSwitching()
-        elseif self.buttonFrame then
+        if self.buttonFrame then
             if self.buttonFrame:IsShown() then
                 self.buttonFrame:Hide()
                 AutoTrinketSwitcherCharDB.buttonFrameHidden = true
@@ -1054,7 +1052,9 @@ function ATS:OnMinimapClick(mouse)
             end
         end
     elseif mouse == "RightButton" then
-        if IsShiftKeyDown() then
+        if IsAltKeyDown() then
+            self:ToggleMountSpeedTrinketSwitching()
+        elseif IsShiftKeyDown() then
             AutoTrinketSwitcherCharDB.lockWindows = not AutoTrinketSwitcherCharDB.lockWindows
             if self.UpdateLockState then self:UpdateLockState() end
         elseif IsControlKeyDown() then
@@ -1085,7 +1085,7 @@ function ATS:OnMinimapTooltipShow(tooltip)
         return "|c"..WHITE..label.."|r |c"..GOLD..text.."|r"
     end
     tooltip:AddLine(line("Left-Click:", "Show/Hide Trinkets"))
-    tooltip:AddLine(line("Alt + Left-Click:", "Toggle Mount-Speed Trinkets"))
+    tooltip:AddLine(line("Alt + Right-Click:", "Toggle Mount-Speed Trinkets"))
     tooltip:AddLine(line("Right-Click:", "Open Option Menu"))
     tooltip:AddLine(line("Shift+ Right-Click:", "Lock/Unlock Buttons"))
     tooltip:AddLine(line("Ctrl + Right-Click:", "Toggle Auto Switching"))
