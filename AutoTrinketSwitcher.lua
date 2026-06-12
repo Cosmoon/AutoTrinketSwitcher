@@ -477,7 +477,7 @@ function ATS:EquipMountSpeedGear()
         local itemID = GetInventoryItemID("player", slot)
         if MOUNT_SPEED_TRINKET_IDS[itemID] then
             equippedSpeedTrinkets[itemID] = true
-        else
+        elseif not (db.manual and db.manual[slot]) then
             table.insert(targetTrinketSlots, slot)
         end
     end
