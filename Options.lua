@@ -47,6 +47,9 @@ function ATS:CreateOptions()
             if key == "readyGlowEnabled" then
                 if ATS.UpdateButtons then ATS:UpdateButtons() end
             end
+            if key == "useMountSpeedManager" and ATS.OnMountSpeedManagerOptionChanged then
+                ATS:OnMountSpeedManagerOptionChanged(db[key])
+            end
             if key == "useDefaultTooltipAnchor" then -- nothing immediate besides tooltip placement
                 -- no-op; placement applied next time tooltips show
             end
@@ -106,6 +109,7 @@ function ATS:CreateOptions()
     local g7 = CreateCheck(generalBox, "Hold ALT for full tooltips", "altFullTooltips", gHeader)
     local g8 = CreateCheck(generalBox, "Block other addon info in tooltips", "cleanTooltips", gHeader)
     local g9 = CreateCheck(generalBox, "Trinket ready glow", "readyGlowEnabled", gHeader)
+    local g10 = CreateCheck(generalBox, "Use mount-speed manager", "useMountSpeedManager", gHeader)
 
     -- Reposition into two columns
     local function PlaceCheck(cb, col, row)
@@ -118,6 +122,7 @@ function ATS:CreateOptions()
     PlaceCheck(g3, 1, 3)
     PlaceCheck(g9, 1, 4)
     PlaceCheck(g4, 1, 5)
+    PlaceCheck(g10, 1, 6)
     PlaceCheck(gTooltip, 2, 1)
     PlaceCheck(g5, 2, 2)
     PlaceCheck(g6, 2, 3)
@@ -329,7 +334,7 @@ function ATS:CreateOptions()
                 end
                 return bottom
             end
-            local gBottom = lowestBottom(g1, g2, g3, g4, g5, g6, g7, g8, g9, gTooltip)
+            local gBottom = lowestBottom(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, gTooltip)
             if not gBottom then gBottom = (gHeader:GetBottom() - 60) end
             generalBox:SetHeight(generalBox:GetTop() - gBottom + 16)
 
@@ -403,6 +408,7 @@ function ATS:CreateOptions()
     self.optionsPanel = panel
     self.optionCheckboxes = self.optionCheckboxes or {}
     self.optionCheckboxes.autoSwitch = g1
+    self.optionCheckboxes.useMountSpeedManager = g10
 end
 
     if ATS and ATS.UpdateOptionsAutoCheckbox then ATS:UpdateOptionsAutoCheckbox() end

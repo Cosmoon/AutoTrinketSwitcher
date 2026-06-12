@@ -7,7 +7,7 @@ What it does
 - Preemptive return: When your top priority becomes “switch-ready” (=30s), it preempts lower priority.
 - Cross-slot coordination: If both slots want the same trinket, slot 13 gets it; slot 14 takes the next ready item.
 - Passive trinkets: Passive items don’t block swaps; usable trinkets only block if they’ll be ready in =30s.
-- Mount handling: Auto switching disables while mounted and restores after dismount (with a brief settle guard to avoid oscillation).
+- Mount handling: Auto switching disables while mounted; an optional mount-speed manager can equip speed gear from your bags and restore your previous gear on dismount.
 - Glow hint: In combat, a slot glows if a queued trinket will be ready in =35s.
 - Manual badge: An “M” appears on a slot when manual mode is active or when auto switching is OFF globally.
 
@@ -42,7 +42,7 @@ Slash commands
 Notes & tips
 - Auto switching only happens out of combat; the glow hint is shown in combat when a swap will be possible soon.
 - The menu can be configured to appear only out of combat.
-- A short settle guard after dismount avoids gear oscillation when auto switching resumes.
+- Optional mount-speed manager support covers Carrot on a Stick, Riding Crop, gloves with Riding Skill, and boots with Mithril Spurs. It is off by default; when disabled, ATS uses the old 1.5s resume guard after dismount.
  - Optional: When using tiny tooltips, enable "Hold ALT for full tooltips" in General settings to see full item tooltips while holding ALT on hover (slots and menu).
  - Optional: Enable "Block other addon info in tooltips" to show trinket tooltips using an isolated tooltip that most addons won't modify.
 
