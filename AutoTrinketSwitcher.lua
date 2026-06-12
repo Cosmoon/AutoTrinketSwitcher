@@ -1085,10 +1085,10 @@ function ATS:OnMinimapTooltipShow(tooltip)
         return "|c"..WHITE..label.."|r |c"..GOLD..text.."|r"
     end
     tooltip:AddLine(line("Left-Click:", "Show/Hide Trinkets"))
-    tooltip:AddLine(line("Alt + Right-Click:", "Toggle Mount-Speed Trinkets"))
     tooltip:AddLine(line("Right-Click:", "Open Option Menu"))
     tooltip:AddLine(line("Shift+ Right-Click:", "Lock/Unlock Buttons"))
     tooltip:AddLine(line("Ctrl + Right-Click:", "Toggle Auto Switching"))
+    tooltip:AddLine(line("Alt + Right-Click:", "Toggle Mount-Speed Trinkets"))
     tooltip:Show()
 end
 -- Update minimap button icon to the currently equipped trinket in slot 13
