@@ -4,17 +4,14 @@ AutoTrinketSwitcher
 
 What it does
 - Auto switch: Out of combat, equips the highest-priority ready trinket for each slot.
-- Preemptive return: When your top priority becomes “switch-ready” (=30s), it preempts lower priority.
+- Preemptive return: When your top priority becomes "switch-ready" (=30s), it preempts lower priority.
 - Cross-slot coordination: If both slots want the same trinket, slot 13 gets it; slot 14 takes the next ready item.
-- Passive trinkets: Passive items don’t block swaps; usable trinkets only block if they’ll be ready in =30s.
-- Mount handling: AutoTrinketSwitcher has a mount-speed gear management system. It can equip Carrot on a Stick, Riding Crop, Riding Skill gloves, and Mithril Spurs boots from bags while mounted. Toggeling Manual Mode will disable trinket switching but still changes gloves and boots when available. You can disable this in the option menu. (Default on)
+- Passive trinkets: Passive items don't block swaps; usable trinkets only block if they'll be ready in = 30s.
+- Mount handling: AutoTrinketSwitcher has a mount-speed gear management system. It can equip Carrot on a Stick, Riding Crop, Riding Skill gloves, and Mithril Spurs boots from bags while mounted. Toggeling mount speed Mode will disable trinket switching but still changes gloves and boots when available. You can disable this in the option menu. (Default on)
 - Glow hint: In combat, a slot glows if a queued trinket will be ready in =35s.
-<<<<<<< HEAD
-- Manual badge: An �M� appears on a slot when manual mode is active or when auto switching is OFF globally.
-- Speed badge: An �S� appears when mount-speed trinket swapping is disabled.
-=======
 - Manual badge: An “M” appears on a slot when manual mode is active or when auto switching is OFF globally.
->>>>>>> 96ff2f3f3e6437461152295abf5cb89997c9f8b7
+- Speed badge: An “S” appears when mount-speed trinket swapping is disabled.
+- Manual badge: An "M" appears on a slot when manual mode is active or when auto switching is OFF globally.
 
 In-game usage
 - Minimap button:
@@ -30,15 +27,15 @@ In-game usage
 - Trinket menu (shows all your trinkets, bag + equipped):
   - Shift-Click: Add/Remove trinket to the priority queue of the clicked slot (Left = slot 13, Right = slot 14)
   - Ctrl-Click: Equip in slot AND toggle manual mode for slot (Left = slot 13, Right = slot 14) or toggle auto queue
-- Manual mode “M” badge:
+- Manual mode "M" badge:
   - Shown on a slot when that slot is manual, or when auto switching is OFF.
   - Manual slots are never auto-swapped.
 
 Priority rules (summary)
-- Each slot has its own queue (1 = highest). The first ready (=30s) item in a slot’s queue is chosen.
+- Each slot has its own queue (1 = highest). The first ready (=30s) item in a slot's queue is chosen.
 - If both slots want the same item, slot 13 wins; slot 14 tries its next choice.
-- While your slot’s top priority isn’t ready, the currently equipped item for that slot is reserved so the other slot won’t steal it.
-- Usable items near ready (=30s) won’t be swapped off unless the incoming trinket is higher priority for that slot.
+- While your slot's top priority isn't ready, the currently equipped item for that slot is reserved so the other slot won't steal it.
+- Usable items near ready (=30s) won't be swapped off unless the incoming trinket is higher priority for that slot.
 
 Slash commands
 - /ats: Show quick help
@@ -54,7 +51,7 @@ Notes & tips
 
 Talent-based queues
 - Tracks separate trinket queues per talent build (Classic trees).
-- When you change talents, ATS automatically switches to that build’s dedicated pair of queues (slot 13 and 14).
+- When you change talents, ATS automatically switches to that buil's dedicated pair of queues (slot 13 and 14).
 - On first run, your current queues are migrated to the current build; new builds start with empty queues.
 - Per-character, saved automatically; no extra setup required.
 
