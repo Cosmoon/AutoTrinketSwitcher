@@ -3,10 +3,12 @@ local ATS = AutoTrinketSwitcherFrame
 local MOUNT_SPEED_TRINKETS = {
     { itemID = 11122 }, -- Carrot on a Stick
     { itemID = 25653 }, -- Riding Crop
+    { itemID = 32863 }, -- Skybreaker Whip
 }
 local MOUNT_SPEED_TRINKET_IDS = {
     [11122] = true,
     [25653] = true,
+    [32863] = true,
 }
 local MOUNT_SPEED_TRINKET_SLOTS = { 13, 14 }
 local MOUNT_SPEED_HAND_SLOT = 10
