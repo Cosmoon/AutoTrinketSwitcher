@@ -3,6 +3,16 @@ Changelog
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
+2.2.0 - 2026-06-24
+- Added class/special trinket handling in `Modules\SpecialTrinkets.lua`.
+- Added Serpent-Coil Braid support with two modes: show mana gem cooldown only, or use the mana gem cooldown for rotation switching.
+- Added a dynamic Special trinkets options list that shows detected supported trinkets with per-trinket dropdowns.
+- Reorganized addon files into the `Modules\` folder and updated the addon load order.
+- Improved cooldown handling so special trinkets can provide separate display and rotation cooldown logic.
+- Improved mount-speed gear restore when a slot was originally empty.
+- Hardened trinket menu and queue scans against missing bag APIs or partial saved queue data.
+- Cleaned up README documentation for the new module layout and special-trinket behavior.
+
 2.1.1 - 2026-06-13
 - Added Skybreaker Whip
 
