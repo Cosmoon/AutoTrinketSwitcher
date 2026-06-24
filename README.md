@@ -1,57 +1,60 @@
-
 AutoTrinketSwitcher
-====================
+===================
 
 What it does
 - Auto switch: Out of combat, equips the highest-priority ready trinket for each slot.
-- Preemptive return: When your top priority becomes "switch-ready" (=30s), it preempts lower priority.
+- Preemptive return: When your top priority becomes switch-ready, it preempts lower priority trinkets.
 - Cross-slot coordination: If both slots want the same trinket, slot 13 gets it; slot 14 takes the next ready item.
-- Passive trinkets: Passive items don't block swaps; usable trinkets only block if they'll be ready in = 30s.
-- Mount handling: AutoTrinketSwitcher has a mount-speed gear management system. It can equip Carrot on a Stick, Riding Crop, Riding Skill gloves, and Mithril Spurs boots from bags while mounted. Toggeling mount speed Mode will disable trinket switching but still changes gloves and boots when available. You can disable this in the option menu. (Default on)
-- Glow hint: In combat, a slot glows if a queued trinket will be ready in =35s.
-- Manual badge: An “M” appears on a slot when manual mode is active or when auto switching is OFF globally.
-- Speed badge: An “S” appears when mount-speed trinket swapping is disabled.
-- Manual badge: An "M" appears on a slot when manual mode is active or when auto switching is OFF globally.
+- Passive trinkets: Passive items do not block swaps; usable trinkets only block if they will be ready in 30 seconds or less.
+- Mount handling: ATS can equip Carrot on a Stick, Riding Crop, Skybreaker Whip, Riding Skill gloves, and Mithril Spurs boots from bags while mounted.
+- Special trinkets: Supported trinkets can expose item-specific modes in Options when detected in bags, equipped slots, queues, or saved settings.
+- Glow hint: In combat, a slot glows if a queued trinket will be ready in 35 seconds or less.
+- Manual badge: An "M" appears on a slot when manual mode is active.
+- Speed badge: An "S" appears when mount-speed trinket swapping is disabled.
 
 In-game usage
 - Minimap button:
   - Left-Click: Show/Hide Trinkets window
-  - Alt+Right-Click: Toggle mount-speed trinket swapping
   - Right-Click: Open/Close Options window
-  - Shift+Right-Click: Lock/Unlock Buttons
-  - Ctrl+Right-Click: Toggle Auto Switching
-  - Drag to reposition when LibDBIcon/LibDataBroker are installed (ATS falls back to the static button otherwise).
-- Trinket buttons (two buttons for slot 13 and 14):
-  - Hover: Shows menu; also shows tooltip if enabled
-  - Alt + Hover: Shows full tooltip
-- Trinket menu (shows all your trinkets, bag + equipped):
-  - Shift-Click: Add/Remove trinket to the priority queue of the clicked slot (Left = slot 13, Right = slot 14)
-  - Ctrl-Click: Equip in slot AND toggle manual mode for slot (Left = slot 13, Right = slot 14) or toggle auto queue
-- Manual mode "M" badge:
-  - Shown on a slot when that slot is manual, or when auto switching is OFF.
-  - Manual slots are never auto-swapped.
+  - Alt + Right-Click: Toggle mount-speed trinket swapping
+  - Shift + Right-Click: Lock/Unlock buttons
+  - Ctrl + Right-Click: Toggle auto switching
+  - Drag to reposition when LibDBIcon/LibDataBroker are installed; ATS falls back to a static button otherwise.
+- Trinket buttons:
+  - Hover: Show the trinket menu and tooltip.
+  - Left-Click: Use the equipped trinket.
+- Trinket menu:
+  - Shift + Left/Right-Click: Add/remove a trinket from slot 13/14 queue.
+  - Ctrl + Left/Right-Click: Equip in slot 13/14 and toggle that slot's manual mode.
 
-Priority rules (summary)
-- Each slot has its own queue (1 = highest). The first ready (=30s) item in a slot's queue is chosen.
+Priority rules
+- Each slot has its own queue; position 1 is highest priority.
+- The first ready trinket with 30 seconds or less cooldown remaining is chosen.
 - If both slots want the same item, slot 13 wins; slot 14 tries its next choice.
-- While your slot's top priority isn't ready, the currently equipped item for that slot is reserved so the other slot won't steal it.
-- Usable items near ready (=30s) won't be swapped off unless the incoming trinket is higher priority for that slot.
+- While a slot's top priority is not ready, the currently equipped queued item for that slot is reserved so the other slot will not steal it.
+- Usable items near ready will not be swapped off unless the incoming trinket is higher priority for that slot.
+
+Special trinkets
+- Serpent-Coil Braid supports:
+  - Off
+  - Show mana gem cooldown
+  - Use mana gem cooldown for switching
+- More special trinkets can be added in `Modules\SpecialTrinkets.lua`.
 
 Slash commands
-- /ats: Show quick help
-- /ats help: Show quick help
+- `/ats`: Show quick help.
+- `/ats clear 13`: Clear slot 13 queue.
+- `/ats clear 14`: Clear slot 14 queue.
+- `/ats clear both`: Clear both queues.
 
-
-Notes & tips
-- Auto switching only happens out of combat; the glow hint is shown in combat when a swap will be possible soon.
-- The menu can be configured to appear only out of combat.
-- Optional mount-speed manager support covers Carrot on a Stick, Riding Crop, gloves with Riding Skill, and boots with Mithril Spurs. It is on by default; when disabled, ATS uses the old 1.5s resume guard after dismount.
- - Optional: When using tiny tooltips, enable "Hold ALT for full tooltips" in General settings to see full item tooltips while holding ALT on hover (slots and menu).
- - Optional: Enable "Block other addon info in tooltips" to show trinket tooltips using an isolated tooltip that most addons won't modify.
+Notes
+- Auto switching only happens out of combat.
+- The trinket menu can be configured to appear only out of combat.
+- Mount-speed manager is on by default and can be disabled in Options.
+- Tiny tooltips, ALT full tooltips, and clean isolated tooltips can be configured in Options.
 
 Talent-based queues
-- Tracks separate trinket queues per talent build (Classic trees).
-- When you change talents, ATS automatically switches to that buil's dedicated pair of queues (slot 13 and 14).
-- On first run, your current queues are migrated to the current build; new builds start with empty queues.
-- Per-character, saved automatically; no extra setup required.
-
+- ATS tracks separate queue sets per talent build.
+- When talents change, ATS automatically switches to that build's dedicated queues.
+- On first run, current queues are migrated to the current build.
+- Settings are saved per character.

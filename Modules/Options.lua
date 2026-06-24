@@ -41,7 +41,10 @@ function ATS:CreateOptions()
                 return
             end
             db[key] = self:GetChecked()
-            if key == "showCooldownNumbers" then ATS:UpdateButtons() end
+            if key == "showCooldownNumbers" then
+                ATS:UpdateButtons()
+                if ATS.UpdateMenuCooldowns then ATS:UpdateMenuCooldowns() end
+            end
             if key == "largeNumbers" then ATS:UpdateCooldownFont() end
             if key == "lockWindows" then ATS:UpdateLockState() end
             if key == "readyGlowEnabled" then
@@ -60,6 +63,7 @@ function ATS:CreateOptions()
         end)
         return cb
     end
+
     local function CreateTooltipCheck(parent, label, anchor)
         local cb = CreateFrame("CheckButton", nil, parent, "InterfaceOptionsCheckButtonTemplate")
         cb.Text:SetText(label)
@@ -131,8 +135,104 @@ function ATS:CreateOptions()
 
     -- menu-only-out-of-combat moved to Menu settings below
 
+    -- Special trinkets settings box; hidden when no supported special trinkets are detected/configured.
+    local specialBox, sHeader = CreateBox("Special trinkets", generalBox, -16)
+    local specialRows = {}
+
+    local function CreateSpecialTrinketRow(index)
+        local row = {}
+        row.name = specialBox:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        row.name:SetPoint("TOPLEFT", sHeader, "BOTTOMLEFT", 16, -12 - (index - 1) * 34)
+        row.name:SetWidth(280)
+        row.name:SetJustifyH("LEFT")
+
+        row.drop = CreateFrame("Frame", "ATSSpecialTrinketModeDropdown" .. index, specialBox, "UIDropDownMenuTemplate")
+        row.drop:SetPoint("LEFT", row.name, "RIGHT", 10, -4)
+        UIDropDownMenu_SetWidth(row.drop, 260)
+
+        local function RefreshDropdown()
+            if not row.itemID then return end
+            local mode = ATS.GetSpecialTrinketMode and ATS:GetSpecialTrinketMode(row.itemID)
+            UIDropDownMenu_SetSelectedValue(row.drop, mode)
+            if ATS.GetSpecialTrinketModeLabel then
+                UIDropDownMenu_SetText(row.drop, ATS:GetSpecialTrinketModeLabel(row.itemID, mode))
+            else
+                UIDropDownMenu_SetText(row.drop, tostring(mode or ""))
+            end
+        end
+
+        row.refresh = RefreshDropdown
+        UIDropDownMenu_Initialize(row.drop, function(self, level)
+            if not row.itemID or not ATS.GetSpecialTrinketModeOrder then return end
+            local order = ATS:GetSpecialTrinketModeOrder(row.itemID) or {}
+            local mode = ATS.GetSpecialTrinketMode and ATS:GetSpecialTrinketMode(row.itemID)
+            for _, value in ipairs(order) do
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = ATS.GetSpecialTrinketModeLabel and ATS:GetSpecialTrinketModeLabel(row.itemID, value) or tostring(value)
+                info.value = value
+                info.func = function()
+                    if ATS.SetSpecialTrinketMode then
+                        ATS:SetSpecialTrinketMode(row.itemID, value)
+                    end
+                    RefreshDropdown()
+                end
+                info.checked = mode == value
+                UIDropDownMenu_AddButton(info)
+            end
+        end)
+
+        return row
+    end
+
+    local function RefreshSpecialTrinketOptions()
+        local ids = {}
+        if ATS.GetDetectedSpecialTrinketIDs then
+            ids = ATS:GetDetectedSpecialTrinketIDs() or {}
+        end
+
+        for _, row in ipairs(specialRows) do
+            row.itemID = nil
+            row.name:Hide()
+            row.drop:Hide()
+        end
+
+        if #ids == 0 then
+            specialBox:Hide()
+            specialBox:SetHeight(1)
+            return 0
+        end
+
+        specialBox:Show()
+        for i, itemID in ipairs(ids) do
+            local row = specialRows[i]
+            if not row then
+                row = CreateSpecialTrinketRow(i)
+                specialRows[i] = row
+            end
+            row.itemID = itemID
+            row.name:SetText(ATS.GetSpecialTrinketDisplayName and ATS:GetSpecialTrinketDisplayName(itemID) or ("item:" .. tostring(itemID)))
+            row.name:Show()
+            row.drop:Show()
+            row.refresh()
+        end
+
+        specialBox:SetHeight(52 + (#ids * 34))
+        return #ids
+    end
+
+    local LayoutOptions
+
+    function ATS:RefreshSpecialTrinketOptions()
+        if not panel:IsShown() then return end
+        if LayoutOptions then
+            LayoutOptions()
+        else
+            RefreshSpecialTrinketOptions()
+        end
+    end
+
     -- Menu settings box
-    local menuBox, mHeader = CreateBox("Menu settings", generalBox, -16)
+    local menuBox, mHeader = CreateBox("Menu settings", specialBox, -16)
     -- First line: Show menu only when out of combat
     local menuOOC = CreateCheck(menuBox, "Show menu only when out of combat", "menuOnlyOutOfCombat", mHeader)
     menuOOC:ClearAllPoints()
@@ -323,7 +423,7 @@ function ATS:CreateOptions()
 
     -- Size boxes when shown to avoid anchoring parents to children
     panel:SetScript("OnShow", function()
-        local function layout()
+        LayoutOptions = function()
             -- Compute bottom of General box: lowest checkbox
             local function lowestBottom(...)
                 local bottom
@@ -339,6 +439,15 @@ function ATS:CreateOptions()
             local gBottom = lowestBottom(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, gTooltip)
             if not gBottom then gBottom = (gHeader:GetBottom() - 60) end
             generalBox:SetHeight(generalBox:GetTop() - gBottom + 16)
+
+            local specialCount = RefreshSpecialTrinketOptions()
+            menuBox:ClearAllPoints()
+            if specialCount > 0 then
+                menuBox:SetPoint("TOPLEFT", specialBox, "BOTTOMLEFT", 0, -16)
+            else
+                menuBox:SetPoint("TOPLEFT", generalBox, "BOTTOMLEFT", 0, -16)
+            end
+            menuBox:SetPoint("RIGHT", panel, -16, 0)
 
             -- Wrap dir button uses its static anchor next to wrap slider.
 
@@ -356,9 +465,9 @@ function ATS:CreateOptions()
         end
 
         -- Run layout now and once next frame to handle initial sizing
-        layout()
+        LayoutOptions()
         if C_Timer and C_Timer.After then
-            C_Timer.After(0, function() if panel:IsShown() then layout() end end)
+            C_Timer.After(0, function() if panel:IsShown() then LayoutOptions() end end)
         end
     end)
 
@@ -411,7 +520,6 @@ function ATS:CreateOptions()
     self.optionCheckboxes = self.optionCheckboxes or {}
     self.optionCheckboxes.autoSwitch = g1
     self.optionCheckboxes.useMountSpeedManager = g10
-end
 
     if ATS and ATS.UpdateOptionsAutoCheckbox then ATS:UpdateOptionsAutoCheckbox() end
-
+end

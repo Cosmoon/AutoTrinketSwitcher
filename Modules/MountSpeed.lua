@@ -199,6 +199,25 @@ local function MarkMountSpeedEquip(slot)
     ATS.lastEquip[slot] = GetTime()
 end
 
+local function UnequipInventorySlot(slot)
+    if not GetInventoryItemID or not GetInventoryItemID("player", slot) then return true end
+    if not PickupInventoryItem or not PutItemInBackpack then return false end
+    if CursorHasItem and CursorHasItem() then return false end
+
+    PickupInventoryItem(slot)
+    if CursorHasItem and CursorHasItem() then
+        PutItemInBackpack()
+    end
+    if CursorHasItem and CursorHasItem() then
+        -- No free bag space: put the item back instead of leaving it on the cursor.
+        PickupInventoryItem(slot)
+        return false
+    end
+
+    MarkMountSpeedEquip(slot)
+    return true
+end
+
 local function MountSpeedHasPrevious(previous)
     if not previous then return false end
     for _, slot in ipairs(MOUNT_SPEED_RESTORE_SLOTS) do
@@ -213,6 +232,7 @@ local function RestoreMountSpeedSlots(db, slots)
     local previous = db.mountSpeedPrevious or {}
     for _, slot in ipairs(slots) do
         local target = previous[slot]
+        local restored = true
         if target and target ~= false then
             local targetID = GetItemIDFromLinkOrID(target)
             local currentID = GetInventoryItemID("player", slot)
@@ -220,8 +240,15 @@ local function RestoreMountSpeedSlots(db, slots)
                 EquipItem(target, slot)
                 MarkMountSpeedEquip(slot)
             end
+        elseif target == false then
+            restored = UnequipInventorySlot(slot)
+        else
+            restored = false
         end
-        previous[slot] = nil
+
+        if restored then
+            previous[slot] = nil
+        end
     end
 
     if MountSpeedHasPrevious(previous) then

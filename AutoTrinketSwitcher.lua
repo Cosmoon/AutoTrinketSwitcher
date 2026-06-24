@@ -11,6 +11,7 @@ local function NormalizeCooldown(start, duration, enable)
 end
 
 local function GetItemCooldownSafe(itemID)
+    if not itemID then return 0, 0, 0 end
     if C_Item and C_Item.GetItemCooldown then
         return NormalizeCooldown(C_Item.GetItemCooldown(itemID))
     end
@@ -29,6 +30,73 @@ local function GetInventoryItemCooldownSafe(unit, slot)
         return GetItemCooldownSafe(itemID)
     end
     return 0, 0, 0
+end
+
+local function IsActiveCooldown(start, duration)
+    return start and duration and start > 0 and duration > 0
+end
+
+local function GetCooldownRemaining(start, duration)
+    if not start or not duration or start == 0 or duration == 0 then
+        return 0
+    end
+    local remaining = duration - (GetTime() - start)
+    if remaining < 0 then remaining = 0 end
+    return remaining
+end
+
+function ATS:GetItemCooldownSafe(itemID)
+    return GetItemCooldownSafe(itemID)
+end
+
+function ATS:GetCooldownRemaining(start, duration)
+    return GetCooldownRemaining(start, duration)
+end
+
+function ATS:IsActiveCooldown(start, duration)
+    return IsActiveCooldown(start, duration)
+end
+
+function ATS:GetSpecialTrinket(itemID)
+    local special = itemID and self.SpecialTrinkets and self.SpecialTrinkets[itemID]
+    if not special then return nil end
+    if special.class then
+        local _, classTag = UnitClass and UnitClass("player")
+        if classTag ~= special.class then return nil end
+    end
+    return special
+end
+
+function ATS:GetDisplayItemCooldown(itemID, fallbackStart, fallbackDuration, fallbackEnable)
+    local special = self:GetSpecialTrinket(itemID)
+    if special and special.getDisplayCooldown then
+        local start, duration, enable, sourceItemID = special.getDisplayCooldown(self, itemID)
+        if start ~= nil or duration ~= nil then
+            return start or 0, duration or 0, enable, sourceItemID or itemID
+        end
+    end
+    if fallbackStart ~= nil or fallbackDuration ~= nil then
+        return fallbackStart or 0, fallbackDuration or 0, fallbackEnable, itemID
+    end
+
+    local start, duration, enable = GetItemCooldownSafe(itemID)
+    return start, duration, enable, itemID
+end
+
+function ATS:GetEffectiveItemCooldown(itemID, fallbackStart, fallbackDuration, fallbackEnable)
+    local special = self:GetSpecialTrinket(itemID)
+    if special and special.getEffectiveCooldown then
+        local start, duration, enable, sourceItemID = special.getEffectiveCooldown(self, itemID)
+        if start ~= nil or duration ~= nil then
+            return start or 0, duration or 0, enable, sourceItemID or itemID
+        end
+    end
+    if fallbackStart ~= nil or fallbackDuration ~= nil then
+        return fallbackStart or 0, fallbackDuration or 0, fallbackEnable, itemID
+    end
+
+    local start, duration, enable = GetItemCooldownSafe(itemID)
+    return start, duration, enable, itemID
 end
 
 local function EquipItemSafe(itemID, slot)
@@ -103,6 +171,9 @@ local function EnsureDB()
     db.useMountSpeedManager = db.useMountSpeedManager ~= false
     db.mountSpeedTrinketsEnabled = db.mountSpeedTrinketsEnabled ~= false
     db.readyGlowEnabled = db.readyGlowEnabled ~= false
+    if ATS.NormalizeSpecialTrinketSettings then
+        ATS:NormalizeSpecialTrinketSettings(db)
+    end
 
     if db.showCooldowns ~= nil and db.showCooldownNumbers == nil then
         db.showCooldownNumbers = db.showCooldowns
@@ -295,20 +366,10 @@ function ATS:OnManualToggle()
     self:UpdateOptionsAutoCheckbox()
 end
 
--- Talent profile functions moved to Profiles.lua
+-- Talent profile functions moved to Modules\Profiles.lua
 
 -- Helper to position the tooltip at the game's default location (or legacy side-anchored)
--- Tooltip helpers moved to Tooltips.lua
-
--- Utility: get remaining cooldown for an itemID
-local function GetCooldownRemaining(start, duration)
-    if not start or not duration or start == 0 or duration == 0 then
-        return 0
-    end
-    local remaining = duration - (GetTime() - start)
-    if remaining < 0 then remaining = 0 end
-    return remaining
-end
+-- Tooltip helpers moved to Modules\Tooltips.lua
 
 local function TrackItemCooldown(itemID, start, duration)
     if not itemID or not start or not duration or start == 0 or duration == 0 then
@@ -332,10 +393,10 @@ end
 
 local function GetItemRemaining(itemID)
     if not itemID then return 0 end
-    local start, duration = GetItemCooldownSafe(itemID)
+    local start, duration, _, sourceItemID = ATS:GetEffectiveItemCooldown(itemID)
     local remaining = GetCooldownRemaining(start, duration)
     if remaining > 0 then return remaining end
-    return GetTrackedItemRemaining(itemID)
+    return GetTrackedItemRemaining(sourceItemID or itemID)
 end
 
 -- Find index of an item within a queue (or large number if not present)
@@ -351,12 +412,20 @@ end
 -- Helper: does an item have a usable effect?
 local function ItemHasUse(itemID)
     if not itemID then return false end
+    local special = ATS:GetSpecialTrinket(itemID)
+    if special and special.hasEffectiveUse and special.hasEffectiveUse(ATS, itemID) then
+        return true
+    end
     local useName = GetItemSpell(itemID)
     return useName ~= nil
 end
 
 local function IsItemEffectActive(itemID)
     if not itemID then return false end
+    local special = ATS:GetSpecialTrinket(itemID)
+    if special and special.isEffectActive and special.isEffectActive(ATS, itemID) then
+        return true
+    end
     local spellName = GetItemSpell(itemID)
     if not spellName then return false end
 
@@ -376,7 +445,8 @@ end
 local function SlotTrinketReady(slot)
     local itemID = GetInventoryItemID("player", slot)
     if not itemID or not ItemHasUse(itemID) then return false end
-    local start, duration = GetInventoryItemCooldownSafe("player", slot)
+    local fallbackStart, fallbackDuration, fallbackEnable = GetInventoryItemCooldownSafe("player", slot)
+    local start, duration = ATS:GetEffectiveItemCooldown(itemID, fallbackStart, fallbackDuration, fallbackEnable)
     return GetCooldownRemaining(start, duration) <= 0
 end
 
@@ -403,6 +473,7 @@ local function ChooseCandidate(slot, avoidID)
     if AutoTrinketSwitcherCharDB.manual and AutoTrinketSwitcherCharDB.manual[slot] then return nil end
     local equippedID = GetInventoryItemID("player", slot)
     local equippedStart, equippedDuration = GetInventoryItemCooldownSafe("player", slot)
+    equippedStart, equippedDuration = ATS:GetEffectiveItemCooldown(equippedID, equippedStart, equippedDuration)
     local equippedCD = GetCooldownRemaining(equippedStart, equippedDuration)
     local equippedHasUse = ItemHasUse(equippedID)
 
@@ -520,36 +591,7 @@ function ATS:UpdateLockState()
     end
 end
 
--- Tooltip display functions moved to Tooltips.lua
-
--- Attempt to equip a trinket for a given slot based on the rules
-local function CheckSlot(slot)
-    local equippedID = GetInventoryItemID("player", slot)
-    local equippedStart, equippedDuration = GetInventoryItemCooldownSafe("player", slot)
-    local equippedCD = GetCooldownRemaining(equippedStart, equippedDuration)
-    local equippedHasUse = false
-    if equippedID then
-        local useName = GetItemSpell(equippedID)
-        equippedHasUse = useName ~= nil
-    end
-    if equippedHasUse and IsItemEffectActive(equippedID) then return end
-    -- Only block swapping if the equipped trinket is a usable item AND its cooldown <= 30s
-    if equippedHasUse and equippedCD <= 30 then return end
-
-    -- Respect per-slot manual mode
-    if AutoTrinketSwitcherCharDB.manual and AutoTrinketSwitcherCharDB.manual[slot] then return end
-
-    for _, itemID in ipairs(AutoTrinketSwitcherCharDB.queues[slot]) do
-        if itemID ~= equippedID then
-            local cd = GetItemRemaining(itemID)
-            -- Trinket is ready to be swapped in if it has 30s or less cooldown remaining
-            if cd <= 30 then
-                EquipItemSafe(itemID, slot)
-                break
-            end
-        end
-    end
-end
+-- Tooltip display functions moved to Modules\Tooltips.lua
 
 -- Apply font size to queue numbers in the menu
 function ATS:ApplyMenuQueueFont()
@@ -677,9 +719,10 @@ function ATS:UpdateButtons()
 
         -- Handle cooldown overlay and text
         if itemID then
-            local start, duration = GetInventoryItemCooldownSafe("player", slot)
-            TrackItemCooldown(itemID, start, duration)
-            if start and duration and start > 0 and duration > 0 then
+            local fallbackStart, fallbackDuration, fallbackEnable = GetInventoryItemCooldownSafe("player", slot)
+            local start, duration, _, sourceItemID = self:GetDisplayItemCooldown(itemID, fallbackStart, fallbackDuration, fallbackEnable)
+            TrackItemCooldown(sourceItemID or itemID, start, duration)
+            if IsActiveCooldown(start, duration) then
                 button.cooldown:SetCooldown(start, duration)
                 button.cooldown:Show()
                 if AutoTrinketSwitcherCharDB.showCooldownNumbers then
@@ -1049,7 +1092,7 @@ ATS:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
--- Talent-change handling moved to Profiles.lua
+-- Talent-change handling moved to Modules\Profiles.lua
 
 -- Mount handling: auto-disable autoSwitch when mounting; restore previous state on dismount
 function ATS:UpdateMountState()
@@ -1158,16 +1201,18 @@ function ATS:PruneMissingFromQueues()
     if not AutoTrinketSwitcherCharDB or not AutoTrinketSwitcherCharDB.queues then return end
     for _, slot in ipairs({13,14}) do
         local q = AutoTrinketSwitcherCharDB.queues[slot]
-        local i = 1
-        while i <= #q do
-            local id = q[i]
-            local count = GetItemCount and GetItemCount(id, false) or 1
-            local eq13 = GetInventoryItemID("player", 13)
-            local eq14 = GetInventoryItemID("player", 14)
-            if count == 0 and id ~= eq13 and id ~= eq14 then
-                table.remove(q, i)
-            else
-                i = i + 1
+        if q then
+            local i = 1
+            while i <= #q do
+                local id = q[i]
+                local count = GetItemCount and GetItemCount(id, false) or 1
+                local eq13 = GetInventoryItemID("player", 13)
+                local eq14 = GetInventoryItemID("player", 14)
+                if count == 0 and id ~= eq13 and id ~= eq14 then
+                    table.remove(q, i)
+                else
+                    i = i + 1
+                end
             end
         end
     end

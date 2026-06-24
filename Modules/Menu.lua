@@ -11,6 +11,7 @@ local function NormalizeCooldown(start, duration, enable)
 end
 
 local function GetItemCooldownSafe(itemID)
+    if not itemID then return 0, 0, 0 end
     if C_Item and C_Item.GetItemCooldown then
         return NormalizeCooldown(C_Item.GetItemCooldown(itemID))
     end
@@ -27,15 +28,17 @@ local function ScanTrinkets()
     local getItemID = C_Container and C_Container.GetContainerItemID or GetContainerItemID
     local present = {}
 
-    for bag = 0, NUM_BAG_SLOTS do
-        for slot = 1, getSlots(bag) do
-            local itemID = getItemID(bag, slot)
-            if itemID then
-                local _, _, _, _, _, _, _, _, equipLoc = GetItemInfo(itemID)
-                if equipLoc == "INVTYPE_TRINKET" and not seen[itemID] then
-                    table.insert(trinkets, itemID)
-                    seen[itemID] = true
-                    present[itemID] = true
+    if getSlots and getItemID then
+        for bag = 0, (NUM_BAG_SLOTS or 4) do
+            for slot = 1, (getSlots(bag) or 0) do
+                local itemID = getItemID(bag, slot)
+                if itemID then
+                    local _, _, _, _, _, _, _, _, equipLoc = GetItemInfo(itemID)
+                    if equipLoc == "INVTYPE_TRINKET" and not seen[itemID] then
+                        table.insert(trinkets, itemID)
+                        seen[itemID] = true
+                        present[itemID] = true
+                    end
                 end
             end
         end
@@ -54,7 +57,7 @@ local function ScanTrinkets()
     local db = AutoTrinketSwitcherCharDB
     if db and db.queues then
         for _, slot in ipairs({13,14}) do
-            for _, id in ipairs(db.queues[slot]) do
+            for _, id in ipairs(db.queues[slot] or {}) do
                 if not seen[id] then
                     table.insert(trinkets, id)
                     seen[id] = true
@@ -353,7 +356,12 @@ end
 function ATS:UpdateMenuCooldowns()
     if not self.menu or not self.menu.icons then return end
     for _, btn in ipairs(self.menu.icons) do
-        local start, duration = GetItemCooldownSafe(btn.itemID)
+        local start, duration
+        if self.GetDisplayItemCooldown then
+            start, duration = self:GetDisplayItemCooldown(btn.itemID)
+        else
+            start, duration = GetItemCooldownSafe(btn.itemID)
+        end
         if start and duration and start > 0 and duration > 0 then
             btn.cooldown:SetCooldown(start, duration)
             btn.cooldown:Show()
