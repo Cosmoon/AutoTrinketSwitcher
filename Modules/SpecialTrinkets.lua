@@ -4,6 +4,8 @@ ATS.SpecialTrinkets = ATS.SpecialTrinkets or {}
 
 local SERPENT_COIL_BRAID_ID = 30720
 local IMPROVED_MANA_GEMS_SPELL_ID = 37447
+local SOLARIAN_SAPPHIRE_ID = 30446
+local BATTLE_SHOUT_SPELL_ID = 6673
 local MANA_GEM_IDS = {
     22044, -- Mana Emerald
     8008,  -- Mana Ruby
@@ -13,6 +15,12 @@ local MANA_GEM_IDS = {
 }
 
 local SERPENT_COIL_MODES = {
+    OFF = "OFF",
+    DISPLAY_ONLY = "DISPLAY_ONLY",
+    ROTATION = "ROTATION",
+}
+
+local SOLARIAN_MODES = {
     OFF = "OFF",
     DISPLAY_ONLY = "DISPLAY_ONLY",
     ROTATION = "ROTATION",
@@ -44,6 +52,38 @@ local function PlayerHasAuraBySpell(spellID, fallbackName)
     return false
 end
 
+local function GetPlayerAuraCooldownBySpell(spellID, fallbackName, fallbackDuration)
+    local spellName = (GetSpellInfo and GetSpellInfo(spellID)) or fallbackName
+    if not spellName then return nil, nil, nil, false end
+
+    local duration, expirationTime
+    if AuraUtil and AuraUtil.FindAuraByName then
+        local name, icon, count, dispelType, auraDuration, auraExpirationTime = AuraUtil.FindAuraByName(spellName, "player", "HELPFUL")
+        if not name then return nil, nil, nil, false end
+        duration, expirationTime = auraDuration, auraExpirationTime
+    else
+        for i = 1, 40 do
+            local name, icon, count, dispelType, auraDuration, auraExpirationTime = UnitBuff("player", i)
+            if not name then break end
+            if name == spellName then
+                duration, expirationTime = auraDuration, auraExpirationTime
+                break
+            end
+        end
+        if not duration and not expirationTime then return nil, nil, nil, false end
+    end
+
+    duration = duration or fallbackDuration or 0
+    expirationTime = expirationTime or 0
+    if duration <= 0 or expirationTime <= 0 then
+        return 0, 0, 0, true
+    end
+
+    local remaining = expirationTime - GetTime()
+    if remaining <= 0 then return 0, 0, 0, true end
+    return expirationTime - duration, duration, 1, true
+end
+
 function ATS:GetManaGemCooldown()
     local hasGem = false
     for _, itemID in ipairs(MANA_GEM_IDS) do
@@ -70,6 +110,14 @@ function ATS:GetManaGemCooldown()
     end
 
     return nil, nil, nil, nil, false
+end
+
+function ATS:GetBattleShoutDurationCooldown()
+    local start, duration, enable, hasAura = GetPlayerAuraCooldownBySpell(BATTLE_SHOUT_SPELL_ID, "Battle Shout", 120)
+    if hasAura then
+        return start or 0, duration or 0, enable
+    end
+    return 0, 0, 0
 end
 
 ATS.SpecialTrinkets[SERPENT_COIL_BRAID_ID] = {
@@ -115,6 +163,39 @@ ATS.SpecialTrinkets[SERPENT_COIL_BRAID_ID] = {
     isEffectActive = function(self, itemID)
         if self:GetSpecialTrinketMode(itemID) ~= SERPENT_COIL_MODES.ROTATION then return false end
         return PlayerHasAuraBySpell(IMPROVED_MANA_GEMS_SPELL_ID, "Improved Mana Gems")
+    end,
+}
+
+ATS.SpecialTrinkets[SOLARIAN_SAPPHIRE_ID] = {
+    name = "Solarian's Sapphire",
+    class = "WARRIOR",
+    defaultMode = SOLARIAN_MODES.ROTATION,
+    modeOrder = {
+        SOLARIAN_MODES.OFF,
+        SOLARIAN_MODES.DISPLAY_ONLY,
+        SOLARIAN_MODES.ROTATION,
+    },
+    modeLabels = {
+        [SOLARIAN_MODES.OFF] = "Off",
+        [SOLARIAN_MODES.DISPLAY_ONLY] = "Show Battle Shout duration",
+        [SOLARIAN_MODES.ROTATION] = "Use Battle Shout duration for switching",
+    },
+
+    getDisplayCooldown = function(self, itemID)
+        local mode = self:GetSpecialTrinketMode(itemID)
+        if mode == SOLARIAN_MODES.OFF then return nil end
+
+        return self:GetBattleShoutDurationCooldown()
+    end,
+
+    getEffectiveCooldown = function(self, itemID)
+        if self:GetSpecialTrinketMode(itemID) ~= SOLARIAN_MODES.ROTATION then return nil end
+
+        return self:GetBattleShoutDurationCooldown()
+    end,
+
+    hasEffectiveUse = function(self, itemID)
+        return self:GetSpecialTrinketMode(itemID) == SOLARIAN_MODES.ROTATION
     end,
 }
 

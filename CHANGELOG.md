@@ -3,6 +3,9 @@ Changelog
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
+2.2.1 - 2026-06-25
+- Added Warrior-only Solarian's Sapphire support. It can show Battle Shout's remaining duration and optionally use that duration as the rotation cooldown.
+
 2.2.0 - 2026-06-24
 - Added class/special trinket handling in `Modules\SpecialTrinkets.lua`.
 - Added Serpent-Coil Braid support with three options: off, show mana gem cooldown only, or use the mana gem cooldown for rotation switching.

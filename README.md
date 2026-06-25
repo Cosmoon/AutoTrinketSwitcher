@@ -39,6 +39,10 @@ Special trinkets
   - Off
   - Show mana gem cooldown
   - Use mana gem cooldown for switching
+- Solarian's Sapphire supports:
+  - Off
+  - Show Battle Shout duration
+  - Use Battle Shout duration for switching
 - More special trinkets can be added in `Modules\SpecialTrinkets.lua`.
 
 Slash commands
