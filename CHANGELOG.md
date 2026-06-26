@@ -3,6 +3,9 @@ Changelog
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
+2.2.2 - 2026-06-26
+- Debounced all talent-change events and deferred profile switching while talent points remain unspent, preventing repeated "Switched trinket queues to current talents" spam during respec/relearn flows.
+
 2.2.1 - 2026-06-25
 - Added Warrior-only Solarian's Sapphire support. It can show Battle Shout's remaining duration and optionally use that duration as the rotation cooldown.
 

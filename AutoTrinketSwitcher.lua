@@ -1054,20 +1054,8 @@ ATS:SetScript("OnEvent", function(self, event, ...)
     elseif event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
         self:UpdateMountState()
     elseif event == "CHARACTER_POINTS_CHANGED" then
-        -- Debounce rapid talent point updates while respecing
-        self._talentChangePing = GetTime()
-        if C_Timer and C_Timer.After then
-            C_Timer.After(1.0, function()
-                if not ATS._talentChangePing then return end
-                if GetTime() - ATS._talentChangePing >= 0.9 then
-                    ATS._talentChangePing = nil
-                    ATS:OnTalentConfigurationChanged()
-                end
-            end)
-        else
-            -- Fallback without timers
-            ATS:OnTalentConfigurationChanged()
-        end
+        -- Talent points can change many times during a respec; wait for the sequence to settle.
+        self:QueueTalentConfigurationChanged()
     elseif event == "PLAYER_TALENT_UPDATE" or event == "ACTIVE_TALENT_GROUP_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" then
         local arg1, arg2 = ...
         if event == "ACTIVE_TALENT_GROUP_CHANGED" then
@@ -1080,7 +1068,8 @@ ATS:SetScript("OnEvent", function(self, event, ...)
             end
         end
         if event ~= "PLAYER_SPECIALIZATION_CHANGED" or arg1 == nil or arg1 == "player" then
-            self:OnTalentConfigurationChanged()
+            local delay = (event == "ACTIVE_TALENT_GROUP_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED") and 0.35 or nil
+            self:QueueTalentConfigurationChanged(delay)
         end
     elseif event == "CVAR_UPDATE" then
         local cvar = ...

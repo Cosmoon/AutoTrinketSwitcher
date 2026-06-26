@@ -168,6 +168,59 @@ local function GetActiveTalentGroupSafe()
     return group or 1
 end
 
+local function FirstNonNegativeNumber(...)
+    for i = 1, select("#", ...) do
+        local value = tonumber(select(i, ...))
+        if value and value >= 0 then
+            return math.floor(value)
+        end
+    end
+    return nil
+end
+
+local function SafeCallForPointCount(func, ...)
+    if type(func) ~= "function" then return nil end
+    local ok, a, b, c = pcall(func, ...)
+    if not ok then return nil end
+    return FirstNonNegativeNumber(a, b, c)
+end
+
+local function GetUnspentTalentPointsSafe()
+    local group = GetActiveTalentGroupSafe()
+    local points
+
+    points = SafeCallForPointCount(GetUnspentTalentPoints, false, false, group)
+    if points == nil then
+        points = SafeCallForPointCount(GetUnspentTalentPoints)
+    end
+    if points == nil then
+        points = SafeCallForPointCount(UnitCharacterPoints, "player")
+    end
+
+    return points or 0
+end
+
+function ATS:HasUnspentTalentPoints()
+    return GetUnspentTalentPointsSafe() > 0
+end
+
+local TALENT_CHANGE_DEBOUNCE_SECONDS = 1.5
+
+function ATS:QueueTalentConfigurationChanged(delay)
+    delay = tonumber(delay) or TALENT_CHANGE_DEBOUNCE_SECONDS
+    self._talentChangeSerial = (self._talentChangeSerial or 0) + 1
+    local serial = self._talentChangeSerial
+
+    if C_Timer and C_Timer.After then
+        C_Timer.After(delay, function()
+            if not ATS or ATS._talentChangeSerial ~= serial then return end
+            ATS:OnTalentConfigurationChanged()
+        end)
+    else
+        self:OnTalentConfigurationChanged()
+    end
+end
+
 -- Build a stable signature of the player's current talents (Classic-style trees)
 function ATS:ComputeTalentSignature()
     local _, classTag = UnitClass and UnitClass("player")
@@ -281,6 +334,12 @@ end
 
 -- Apply profile switching and notify the player
 function ATS:OnTalentConfigurationChanged()
+    if self:HasUnspentTalentPoints() then
+        self._talentProfileDeferredForUnspent = true
+        return
+    end
+
+    self._talentProfileDeferredForUnspent = nil
     local switched = self:SyncActiveTalentProfile()
     if switched then
         local msg = "Switched trinket queues to current talents"
