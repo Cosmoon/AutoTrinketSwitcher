@@ -3,6 +3,10 @@ Changelog
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
+Unreleased
+- Replaced Serpent-Coil Braid's old modes with four combined display/rotation modes for Mana Surge and mana gem cooldown tracking.
+- Fixed Serpent-Coil Braid rotation mode so it waits for the temporary Mana Surge buff to expire before swapping, instead of treating the passive Improved Mana Gems aura as the active effect.
+
 2.2.2 - 2026-06-26
 - Debounced all talent-change events and deferred profile switching while talent points remain unspent, preventing repeated "Switched trinket queues to current talents" spam during respec/relearn flows.
 

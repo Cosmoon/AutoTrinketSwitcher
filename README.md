@@ -36,9 +36,10 @@ Priority rules
 
 Special trinkets
 - Serpent-Coil Braid supports:
-  - Off
-  - Show mana gem cooldown
-  - Use mana gem cooldown for switching
+  - Mana Surge CD shown; switch by Mana Surge
+  - Mana Surge CD shown; switch by mana gem
+  - Mana gem CD shown; switch by mana gem
+  - Mana gem CD shown; switch by Mana Surge
 - Solarian's Sapphire supports:
   - Off
   - Show Battle Shout duration

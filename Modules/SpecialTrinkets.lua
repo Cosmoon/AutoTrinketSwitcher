@@ -3,7 +3,7 @@ local ATS = AutoTrinketSwitcherFrame
 ATS.SpecialTrinkets = ATS.SpecialTrinkets or {}
 
 local SERPENT_COIL_BRAID_ID = 30720
-local IMPROVED_MANA_GEMS_SPELL_ID = 37447
+local MANA_SURGE_SPELL_ID = 37445
 local SOLARIAN_SAPPHIRE_ID = 30446
 local BATTLE_SHOUT_SPELL_ID = 6673
 local MANA_GEM_IDS = {
@@ -15,9 +15,34 @@ local MANA_GEM_IDS = {
 }
 
 local SERPENT_COIL_MODES = {
-    OFF = "OFF",
-    DISPLAY_ONLY = "DISPLAY_ONLY",
-    ROTATION = "ROTATION",
+    MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION = "MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION",
+    MANA_SURGE_DISPLAY_MANA_GEM_ROTATION = "MANA_SURGE_DISPLAY_MANA_GEM_ROTATION",
+    MANA_GEM_DISPLAY_MANA_GEM_ROTATION = "MANA_GEM_DISPLAY_MANA_GEM_ROTATION",
+    MANA_GEM_DISPLAY_MANA_SURGE_ROTATION = "MANA_GEM_DISPLAY_MANA_SURGE_ROTATION",
+}
+
+local SERPENT_COIL_SOURCES = {
+    MANA_SURGE = "MANA_SURGE",
+    MANA_GEM = "MANA_GEM",
+}
+
+local SERPENT_COIL_MODE_SOURCES = {
+    [SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION] = {
+        display = SERPENT_COIL_SOURCES.MANA_SURGE,
+        rotation = SERPENT_COIL_SOURCES.MANA_SURGE,
+    },
+    [SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_GEM_ROTATION] = {
+        display = SERPENT_COIL_SOURCES.MANA_SURGE,
+        rotation = SERPENT_COIL_SOURCES.MANA_GEM,
+    },
+    [SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_GEM_ROTATION] = {
+        display = SERPENT_COIL_SOURCES.MANA_GEM,
+        rotation = SERPENT_COIL_SOURCES.MANA_GEM,
+    },
+    [SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_SURGE_ROTATION] = {
+        display = SERPENT_COIL_SOURCES.MANA_GEM,
+        rotation = SERPENT_COIL_SOURCES.MANA_SURGE,
+    },
 }
 
 local SOLARIAN_MODES = {
@@ -112,6 +137,14 @@ function ATS:GetManaGemCooldown()
     return nil, nil, nil, nil, false
 end
 
+function ATS:GetManaSurgeCooldown(itemID)
+    local start, duration, enable, hasAura = GetPlayerAuraCooldownBySpell(MANA_SURGE_SPELL_ID, "Mana Surge", 15)
+    if hasAura then
+        return start or 0, duration or 0, enable, itemID or SERPENT_COIL_BRAID_ID, true
+    end
+    return 0, 0, 0, itemID or SERPENT_COIL_BRAID_ID, true
+end
+
 function ATS:GetBattleShoutDurationCooldown()
     local start, duration, enable, hasAura = GetPlayerAuraCooldownBySpell(BATTLE_SHOUT_SPELL_ID, "Battle Shout", 120)
     if hasAura then
@@ -120,49 +153,75 @@ function ATS:GetBattleShoutDurationCooldown()
     return 0, 0, 0
 end
 
+local function GetSerpentCoilCooldown(self, itemID, source)
+    if source == SERPENT_COIL_SOURCES.MANA_SURGE then
+        return self:GetManaSurgeCooldown(itemID)
+    end
+    if source == SERPENT_COIL_SOURCES.MANA_GEM then
+        return self:GetManaGemCooldown()
+    end
+end
+
+local function GetSerpentCoilSources(mode)
+    return SERPENT_COIL_MODE_SOURCES[mode]
+end
+
+local function MigrateSerpentCoilMode(mode)
+    if IsValidSpecialTrinketMode(SERPENT_COIL_BRAID_ID, mode) then return mode end
+    if mode == "DISPLAY_ONLY" or mode == "ROTATION" then
+        return SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_GEM_ROTATION
+    end
+end
+
 ATS.SpecialTrinkets[SERPENT_COIL_BRAID_ID] = {
     name = "Serpent-Coil Braid",
     class = "MAGE",
-    defaultMode = SERPENT_COIL_MODES.DISPLAY_ONLY,
+    defaultMode = SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION,
     modeOrder = {
-        SERPENT_COIL_MODES.OFF,
-        SERPENT_COIL_MODES.DISPLAY_ONLY,
-        SERPENT_COIL_MODES.ROTATION,
+        SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION,
+        SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_GEM_ROTATION,
+        SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_GEM_ROTATION,
+        SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_SURGE_ROTATION,
     },
     modeLabels = {
-        [SERPENT_COIL_MODES.OFF] = "Off",
-        [SERPENT_COIL_MODES.DISPLAY_ONLY] = "Show mana gem cooldown",
-        [SERPENT_COIL_MODES.ROTATION] = "Use mana gem cooldown for switching",
+        [SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION] = "Mana Surge CD shown; switch by Mana Surge",
+        [SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_GEM_ROTATION] = "Mana Surge CD shown; switch by mana gem",
+        [SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_GEM_ROTATION] = "Mana gem CD shown; switch by mana gem",
+        [SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_SURGE_ROTATION] = "Mana gem CD shown; switch by Mana Surge",
     },
 
     getDisplayCooldown = function(self, itemID)
         local mode = self:GetSpecialTrinketMode(itemID)
-        if mode == SERPENT_COIL_MODES.OFF then return nil end
+        local sources = GetSerpentCoilSources(mode)
+        if not sources then return nil end
 
-        local start, duration, enable, sourceItemID, hasSource = self:GetManaGemCooldown()
+        local start, duration, enable, sourceItemID, hasSource = GetSerpentCoilCooldown(self, itemID, sources.display)
         if hasSource then
             return start or 0, duration or 0, enable, sourceItemID
         end
     end,
 
     getEffectiveCooldown = function(self, itemID)
-        if self:GetSpecialTrinketMode(itemID) ~= SERPENT_COIL_MODES.ROTATION then return nil end
+        local sources = GetSerpentCoilSources(self:GetSpecialTrinketMode(itemID))
+        if not sources then return nil end
 
-        local start, duration, enable, sourceItemID, hasSource = self:GetManaGemCooldown()
+        local start, duration, enable, sourceItemID, hasSource = GetSerpentCoilCooldown(self, itemID, sources.rotation)
         if hasSource then
             return start or 0, duration or 0, enable, sourceItemID
         end
     end,
 
     hasEffectiveUse = function(self, itemID)
-        if self:GetSpecialTrinketMode(itemID) ~= SERPENT_COIL_MODES.ROTATION then return false end
-        local _, _, _, _, hasSource = self:GetManaGemCooldown()
-        return hasSource
+        local sources = GetSerpentCoilSources(self:GetSpecialTrinketMode(itemID))
+        if not sources then return false end
+
+        local _, _, _, _, hasSource = GetSerpentCoilCooldown(self, itemID, sources.rotation)
+        return hasSource or PlayerHasAuraBySpell(MANA_SURGE_SPELL_ID, "Mana Surge")
     end,
 
     isEffectActive = function(self, itemID)
-        if self:GetSpecialTrinketMode(itemID) ~= SERPENT_COIL_MODES.ROTATION then return false end
-        return PlayerHasAuraBySpell(IMPROVED_MANA_GEMS_SPELL_ID, "Improved Mana Gems")
+        if not GetSerpentCoilSources(self:GetSpecialTrinketMode(itemID)) then return false end
+        return PlayerHasAuraBySpell(MANA_SURGE_SPELL_ID, "Mana Surge")
     end,
 }
 
@@ -206,18 +265,14 @@ function ATS:NormalizeSpecialTrinketSettings(db)
     db.specialTrinketModes = db.specialTrinketModes or {}
 
     if db.serpentCoilMode ~= nil or db.showSerpentCoilManaGemCooldown ~= nil then
-        local mode = db.serpentCoilMode
-        if not IsValidSpecialTrinketMode(SERPENT_COIL_BRAID_ID, mode) then
-            if db.showSerpentCoilManaGemCooldown == false then
-                mode = SERPENT_COIL_MODES.OFF
-            else
-                mode = SERPENT_COIL_MODES.DISPLAY_ONLY
-            end
+        local mode = MigrateSerpentCoilMode(db.serpentCoilMode)
+        if not mode then
+            mode = SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_GEM_ROTATION
         end
         db.specialTrinketModes[SERPENT_COIL_BRAID_ID] = mode
     elseif db.specialTrinketModes[SERPENT_COIL_BRAID_ID] ~= nil
         and not IsValidSpecialTrinketMode(SERPENT_COIL_BRAID_ID, db.specialTrinketModes[SERPENT_COIL_BRAID_ID]) then
-        db.specialTrinketModes[SERPENT_COIL_BRAID_ID] = nil
+        db.specialTrinketModes[SERPENT_COIL_BRAID_ID] = MigrateSerpentCoilMode(db.specialTrinketModes[SERPENT_COIL_BRAID_ID])
     end
 
     db.serpentCoilMode = nil
@@ -274,7 +329,7 @@ function ATS:SetSpecialTrinketMode(itemID, mode)
 end
 
 function ATS:GetSerpentCoilMode()
-    return self:GetSpecialTrinketMode(SERPENT_COIL_BRAID_ID) or SERPENT_COIL_MODES.DISPLAY_ONLY
+    return self:GetSpecialTrinketMode(SERPENT_COIL_BRAID_ID) or SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION
 end
 
 function ATS:SetSerpentCoilMode(mode)
