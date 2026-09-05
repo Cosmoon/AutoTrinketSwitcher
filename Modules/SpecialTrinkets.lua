@@ -216,11 +216,15 @@ ATS.SpecialTrinkets[SERPENT_COIL_BRAID_ID] = {
         if not sources then return false end
 
         local _, _, _, _, hasSource = GetSerpentCoilCooldown(self, itemID, sources.rotation)
-        return hasSource or PlayerHasAuraBySpell(MANA_SURGE_SPELL_ID, "Mana Surge")
+        return hasSource or (
+            sources.rotation == SERPENT_COIL_SOURCES.MANA_SURGE
+            and PlayerHasAuraBySpell(MANA_SURGE_SPELL_ID, "Mana Surge")
+        )
     end,
 
     isEffectActive = function(self, itemID)
-        if not GetSerpentCoilSources(self:GetSpecialTrinketMode(itemID)) then return false end
+        local sources = GetSerpentCoilSources(self:GetSpecialTrinketMode(itemID))
+        if not sources or sources.rotation ~= SERPENT_COIL_SOURCES.MANA_SURGE then return false end
         return PlayerHasAuraBySpell(MANA_SURGE_SPELL_ID, "Mana Surge")
     end,
 }
