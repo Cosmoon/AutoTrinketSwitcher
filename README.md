@@ -9,6 +9,8 @@ What it does
 - Mount handling: ATS can equip Carrot on a Stick, Riding Crop, Skybreaker Whip, Riding Skill gloves, and Mithril Spurs boots from bags while mounted.
 - Special trinkets: Supported trinkets can expose item-specific modes in Options when detected in bags, equipped slots, queues, or saved settings.
 - Glow hint: In combat, a slot glows if a queued trinket will be ready in 35 seconds or less.
+- Macro ready glow: Optional glow on action-bar macros containing `/use 13` and/or `/use 14`, including conditional slot-use lines. Supports Blizzard, Bartender, and Dominos buttons.
+- Ready sound: Optional Chime, Bell, or Pulse when an equipped on-use trinket finishes its cooldown.
 - Manual badge: An "M" appears on a slot when manual mode is active.
 - Speed badge: An "S" appears when mount-speed trinket swapping is disabled.
 
@@ -63,3 +65,11 @@ Talent-based queues
 - When talents change, ATS automatically switches to that build's dedicated queues.
 - On first run, current queues are migrated to the current build.
 - Settings are saved per character.
+
+Ready alerts
+- Open Options and scroll to Trinket ready alerts. Both alerts are disabled by default.
+- Choose Moving (animated border) or Steady (soft, non-moving glow) under Glow style. Both use the configured colors and width; Steady uses width to adjust the glow spread.
+- Configure separate macro glow colors for slot 13 ready (green), slot 14 ready (blue), and both ready (gold), plus border width (1-10 px).
+- A macro using both slots changes color to show which trinket remains ready; its glow turns off when neither is ready. Single-slot macros use that slot's color.
+- Choose a ready sound, set its volume (10-100%), and use Preview to hear it. Sound uses the WoW Master channel.
+- Alerts ignore the global cooldown and do not sound on login or when equipping an already-ready trinket. Simultaneous cooldown completions play one sound.

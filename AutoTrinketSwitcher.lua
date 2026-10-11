@@ -171,6 +171,12 @@ local function EnsureDB()
     db.useMountSpeedManager = db.useMountSpeedManager ~= false
     db.mountSpeedTrinketsEnabled = db.mountSpeedTrinketsEnabled ~= false
     db.readyGlowEnabled = db.readyGlowEnabled ~= false
+    db.macroReadyGlowEnabled = db.macroReadyGlowEnabled == true
+    db.macroReadyGlowStyle = db.macroReadyGlowStyle == "STEADY" and "STEADY" or "MOVING"
+    db.macroReadyGlowWidth = math.max(1, math.min(10, math.floor((tonumber(db.macroReadyGlowWidth) or 2) + 0.5)))
+    db.readySoundEnabled = db.readySoundEnabled == true
+    db.readySound = db.readySound or "Chime"
+    db.readySoundVolume = math.max(10, math.min(100, tonumber(db.readySoundVolume) or 70))
     if ATS.NormalizeSpecialTrinketSettings then
         ATS:NormalizeSpecialTrinketSettings(db)
     end
@@ -199,6 +205,9 @@ local function EnsureDB()
     db.colors.manualBadge = db.colors.manualBadge or { r = 1, g = 1, b = 1 }
     db.colors.speedBadge = db.colors.speedBadge or { r = 0, g = 0.8, b = 1 }
     db.colors.readyGlow = db.colors.readyGlow or { r = 1, g = 1, b = 1 }
+    db.colors.macroReadyGlow = db.colors.macroReadyGlow or { r = 1, g = 0.82, b = 0 }
+    db.colors.macroReadyGlow13 = db.colors.macroReadyGlow13 or { r = 0.2, g = 1, b = 0.2 }
+    db.colors.macroReadyGlow14 = db.colors.macroReadyGlow14 or { r = 0.2, g = 0.6, b = 1 }
 
     db.buttonPos = db.buttonPos or { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 }
     db.minimap = db.minimap or { hide = false }
@@ -952,6 +961,7 @@ function ATS:PLAYER_LOGIN()
     self:CreateOptions()
     self:CreateButtons()
     self:CreateMinimapButton()
+    self:StartReadyAlerts()
     self.elapsed = 0
     self.cdElapsed = 0
     self.mountAutoModified = false

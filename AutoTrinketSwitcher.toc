@@ -2,8 +2,11 @@
 ## Title: AutoTrinketSwitcher
 ## Notes: Automatically switches trinkets with an options panel and clickable trinket slots
 ## Author: Cosmoon
-## Version: 2.2.2
-## OptionalDeps: LibDataBroker-1.1, LibDBIcon-1.0
+## Version: 2.3.0
+## OptionalDeps: LibDataBroker-1.1, LibDBIcon-1.0, LibCustomGlow-1.0, Masque
+Libs\LibStub\LibStub.lua
+Libs\LibCustomGlow-1.0\LibCustomGlow-1.0.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
 Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 Libs\LibDBIcon-1.0\lib.xml
 ## SavedVariablesPerCharacter: AutoTrinketSwitcherCharDB
@@ -15,4 +18,5 @@ Modules\Minimap.lua
 Modules\Tooltips.lua
 Modules\Profiles.lua
 Modules\Menu.lua
+Modules\ReadyAlerts.lua
 Modules\Options.lua
