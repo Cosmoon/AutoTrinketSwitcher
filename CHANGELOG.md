@@ -6,7 +6,7 @@ All notable changes to AutoTrinketSwitcher are documented here.
 Unreleased
 - Replaced Serpent-Coil Braid's old modes with four combined display/rotation modes for Mana Surge and mana gem cooldown tracking.
 
-2.3.0 - 2026-10-11
+2.2.4 - 2026-10-11
 - Macro button ready glow for action-bar macros using trinket slots 13 or 14.
 - Audio alerts when an equipped trinket becomes ready.
 
