@@ -2,6 +2,9 @@
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
+## 2.3.2 - 2026-10-25
+- Fixed manual-mode trinket selection: left-click equips slot 13 and right-click equips slot 14 when the selected slot is in manual mode, even while auto switching is enabled. The selected trinket is remembered as the manual preference.
+
 ## 2.3.1 - 2026-10-25
 - Minimap Ctrl, Shift and Alt shortcuts now work with either left-click or right-click.
 

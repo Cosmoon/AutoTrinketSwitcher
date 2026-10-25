@@ -2,7 +2,7 @@
 ## Title: AutoTrinketSwitcher
 ## Notes: Automatically switches trinkets with an options panel and clickable trinket slots
 ## Author: Cosmoon
-## Version: 2.3.1
+## Version: 2.3.2
 ## OptionalDeps: LibDataBroker-1.1, LibDBIcon-1.0, LibCustomGlow-1.0, Masque
 ## SavedVariablesPerCharacter: AutoTrinketSwitcherCharDB
 ## LoadSavedVariablesFirst: 1

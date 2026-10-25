@@ -233,8 +233,12 @@ function ATS:ShowMenu(anchor)
                 local slot = mouse == "LeftButton" and 13 or 14
                 ATS:ToggleTrinket(slot, self.itemID)
                 ATS:RefreshMenuNumbers()
-            elseif not AutoTrinketSwitcherCharDB.autoSwitch then
+            else
                 local slot = mouse == "LeftButton" and 13 or 14
+                local db = AutoTrinketSwitcherCharDB
+                if db.autoSwitch and not (db.manual and db.manual[slot]) then return end
+                db.manualPreferred = db.manualPreferred or {}
+                db.manualPreferred[slot] = self.itemID
                 if ATS.EquipItemSafe then
                     ATS:EquipItemSafe(self.itemID, slot)
                 elseif C_Item and C_Item.EquipItemByName then
