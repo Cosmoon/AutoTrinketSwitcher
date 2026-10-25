@@ -7,33 +7,34 @@ local LDBIcon = LibStub and LibStub("LibDBIcon-1.0", true)
 function ATS:OnMinimapClick(mouse)
     if self.EnsureDB then self:EnsureDB() end
 
-    if mouse == "LeftButton" then
+    if mouse ~= "LeftButton" and mouse ~= "RightButton" then return end
+
+    if IsAltKeyDown() and self:HasRelevantMountGear() then
+        self:ToggleMountSpeedTrinketSwitching()
+    elseif IsShiftKeyDown() then
+        AutoTrinketSwitcherCharDB.lockWindows = not AutoTrinketSwitcherCharDB.lockWindows
+        if self.UpdateLockState then self:UpdateLockState() end
+    elseif IsControlKeyDown() then
+        local manual = AutoTrinketSwitcherCharDB.manual or {}
+        local on = not ((manual[13]) and (manual[14]))
+        self:SetGlobalAutoSwitch(not on)
+    elseif mouse == "LeftButton" then
         if self.buttonFrame then
             self:SetButtonFrameHidden(self.buttonFrame:IsShown())
         end
-    elseif mouse == "RightButton" then
-        if IsAltKeyDown() and self:HasRelevantMountGear() then
-            self:ToggleMountSpeedTrinketSwitching()
-        elseif IsShiftKeyDown() then
-            AutoTrinketSwitcherCharDB.lockWindows = not AutoTrinketSwitcherCharDB.lockWindows
-            if self.UpdateLockState then self:UpdateLockState() end
-        elseif IsControlKeyDown() then
-            local manual = AutoTrinketSwitcherCharDB.manual or {}
-            local on = not ((manual[13]) and (manual[14]))
-            self:SetGlobalAutoSwitch(not on)
-        else
-            if self.optionsWindow then
-                if self.optionsWindow:IsShown() then
-                    self.optionsWindow:Hide()
-                    if self.optionsPanel then self.optionsPanel:Hide() end
-                else
-                    if self.optionsPanel then self.optionsPanel:Show() end
-                    self.optionsWindow:Show()
-                end
+        return
+    else
+        if self.optionsWindow then
+            if self.optionsWindow:IsShown() then
+                self.optionsWindow:Hide()
+                if self.optionsPanel then self.optionsPanel:Hide() end
+            else
+                if self.optionsPanel then self.optionsPanel:Show() end
+                self.optionsWindow:Show()
             end
         end
-        if self.menu and self.menu:IsShown() then self.menu:Hide() end
     end
+    if self.menu and self.menu:IsShown() then self.menu:Hide() end
 end
 
 function ATS:OnMinimapTooltipShow(tooltip)
@@ -46,10 +47,10 @@ function ATS:OnMinimapTooltipShow(tooltip)
     end
     tooltip:AddLine(line("Left-Click:", "Show/Hide Trinkets"))
     tooltip:AddLine(line("Right-Click:", "Open Option Menu"))
-    tooltip:AddLine(line("Ctrl + Right-Click:", "Toggle Auto Switching"))
-    tooltip:AddLine(line("Shift + Right-Click:", "Lock/Unlock Buttons"))
+    tooltip:AddLine(line("Ctrl + Click:", "Toggle Auto Switching"))
+    tooltip:AddLine(line("Shift + Click:", "Lock/Unlock Buttons"))
     if self:HasRelevantMountGear() then
-        tooltip:AddLine(line("Alt + Right-Click:", "Toggle mount-speed trinket swapping"))
+        tooltip:AddLine(line("Alt + Click:", "Toggle mount-speed trinket swapping"))
     end
     tooltip:Show()
 end

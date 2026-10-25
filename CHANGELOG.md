@@ -1,27 +1,28 @@
-## 2.3.0
+# Changelog
+
+All notable changes to AutoTrinketSwitcher are documented here.
+
+## 2.3.1 - 2026-10-25
+- Minimap Ctrl, Shift and Alt shortcuts now work with either left-click or right-click.
+
+## 2.3.0 - 2026-10-24
 - AutoTrinketSwitcher now supports Classic, TBC, MoP, Retail and Forever.
 - Added Retail Masterwork Riding Crop and Forever The Desert Rose.
 - Hide irrelevant mount controls and special-item modes; preserve stored choices.
 - Mana Surge switching now holds Serpent-Coil Braid through the buff, yields until Mana Emerald is ready, and uses a 120-second fallback when the gem cooldown is unavailable. Permanent auras no longer hold the braid.
 - Serpent-Coil Braid now uses the reference modes: off, Mana Emerald display only, or Mana Surge hold with Mana Emerald rotation. Existing combined modes migrate to automatic rotation.
 
-Changelog
-=========
-
-All notable changes to AutoTrinketSwitcher are documented here.
-
-
-2.2.4 - 2026-10-11
+## 2.2.4 - 2026-10-11
 - Macro button ready glow for action-bar macros using trinket slots 13 or 14.
 - Audio alerts when an equipped trinket becomes ready.
 
-2.2.2 - 2026-06-26
+## 2.2.2 - 2026-06-26
 - Debounced all talent-change events and deferred profile switching while talent points remain unspent, preventing repeated "Switched trinket queues to current talents" spam during respec/relearn flows.
 
-2.2.1 - 2026-06-25
+## 2.2.1 - 2026-06-25
 - Added Warrior-only Solarian's Sapphire support. It can show Battle Shout's remaining duration and optionally use that duration as the rotation cooldown.
 
-2.2.0 - 2026-06-24
+## 2.2.0 - 2026-06-24
 - Added class/special trinket handling in `Modules\SpecialTrinkets.lua`.
 - Added Serpent-Coil Braid support with three options: off, show mana gem cooldown only, or use the mana gem cooldown for rotation switching.
 - Added a dynamic Special trinkets options list that shows detected supported trinkets with per-trinket dropdowns.
@@ -31,10 +32,10 @@ All notable changes to AutoTrinketSwitcher are documented here.
 - Hardened trinket menu and queue scans against missing bag APIs or partial saved queue data.
 - Cleaned up README documentation for the new module layout and special-trinket behavior.
 
-2.1.1 - 2026-06-13
+## 2.1.1 - 2026-06-13
 - Added Skybreaker Whip
 
-2.1.0 - 2026-06-13
+## 2.1.0 - 2026-06-13
 - Added mount-speed gear management: ATS can equip Carrot on a Stick, Riding Crop, Riding Skill gloves, and Mithril Spurs boots from bags while mounted.
 - Restores the previously equipped trinkets, gloves, and boots immediately on dismount when the mount-speed manager is enabled. Much faster switching back to default gear. Works when dismounting using ability's.
 - Added a General settings toggle for the mount-speed manager; it defaults on, and disabling it restores the previous mounted auto-switch suppression.
@@ -42,43 +43,43 @@ All notable changes to AutoTrinketSwitcher are documented here.
 - Added Alt + Right-Click on the minimap button to toggle only mount-speed trinket swapping; when disabled, an S badge appears on the trinket buttons.
 - Added a configurable colour for the S badge.
 
-2.0.3 - 2026-02-15
+## 2.0.3 - 2026-02-15
 - Fixed manual-slot recovery after mount mode: if another addon equips a speed trinket while mounted, ATS now restores the saved manual trinket on dismount.
 - Added a short delayed re-check after dismount to handle addon swap race conditions more reliably.
 - Manual restore now skips equip attempts during combat lockdown.
 - Auto swapping now pauses while the player is busy (casting/channeling/targeting), preventing repeated failed equip attempts and warning spam while crafting.
 
-2.0.2 - 2026-02-07
+## 2.0.2 - 2026-02-07
 - Fixed passive-only queue oscillation in the same slot: ATS now keeps the highest-priority ready trinket equipped instead of bouncing between passive entries.
 
-2.0.1 - 2026-02-06
+## 2.0.1 - 2026-02-06
 - Fixed talent-profile keying so dual-spec switches no longer jump to empty queues or appear to "delete" saved rotations.
 - Added safer active spec-group detection across Classic/BCC API variants to keep primary/secondary profiles separated correctly.
 - Added profile recovery fallback: when a newly selected profile is empty, ATS now reuses existing non-empty queues (sibling spec or previous active profile).
 
-2.0.0 - 2026-01-15
+## 2.0.0 - 2026-01-15
 - Updated for Burning Crusade client compatibility (Interface 20505 + cooldown API normalization).
 - Fixed trinket button clicks to respect ActionButtonUseKeyDown.
 - Improved cooldown tracking to prevent swap oscillation and missing overlays.
 - Simplified tooltip option to a single "Show tooltips" checkbox (removed right-click mode).
 - Menu settings sliders now render a visible track in the options UI.
 
-1.9.1 - 2025-12-30
+## 1.9.1 - 2025-12-30
 - Added two queue-set buttons to swap between two saved trinket rotations per talent profile. So if you change gear set you also can quickly change trinket rotation.
 - Prevent auto swapping or manual restore attempts while the player is dead or a ghost.
 
-1.5 - 2025-09-20
+## 1.5 - 2025-09-20
 - Minimap button now uses LibDBIcon/LibDataBroker so it can be dragged and remembers its position.
 - Falls back to the built-in minimap button if the libraries are missing.
 
-1.4 - 2025-09-19
+## 1.4 - 2025-09-19
 - Added a ready glow that reuses the mounted border whenever an equipped on-use trinket comes off cooldown.
 - Added a "Trinket ready glow" toggle and color picker so the effect can be customized or disabled.
 - Mount override persistence fixes: the red mounted indicator now survives login/reload and reactivates while mounted.
 - Trinket menus now align with the top of the buttons when placed near the top half of the screen and with the bottom when placed near the bottom.
 - General polish and small bug fixes around tooltip/menu refresh and cooldown handling while mounted.
 
-1.3 - 2025-09-16
+## 1.3 - 2025-09-16
 - Added talent-based profiles: separate trinket queues per talent build and automatic profile switching on talent change.
 - Added menu sorting modes: Queued first (13-only -> 14-only -> both -> others), Name, Item level.
 - Menu visuals: queued items now glow with slot colors; removed candidate-only highlight.
@@ -91,7 +92,7 @@ All notable changes to AutoTrinketSwitcher are documented here.
 - Slash commands: added `/ats clear 13`, `/ats clear 14`, `/ats clear both`; help output reformatted.
 - Internal cleanup: split tooltip and talent-profile logic into `Tooltips.lua` and `Profiles.lua`.
 
-1.0
+## 1.0
 - Initial release.
 - Out-of-combat automatic trinket switching per-slot based on queue priority.
 - Cross-slot coordination when both want the same item.

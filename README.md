@@ -15,8 +15,8 @@ In-game usage
 - Minimap button:
   - Left-Click: Show/Hide Trinkets window
   - Right-Click: Open/Close Options window
-  - Shift + Right-Click: Lock/Unlock buttons
-  - Ctrl + Right-Click: Toggle auto switching
+  - Shift + Click (left or right): Lock/Unlock buttons
+  - Ctrl + Click (left or right): Toggle auto switching
   - Drag to reposition using the bundled minimap libraries.
 - Trinket buttons:
   - Hover: Show the trinket menu and tooltip.
@@ -49,7 +49,7 @@ Notes
 - Supports Classic, TBC, MoP, Retail and Forever through automatic client detection.
 - Mount gear: Classic riding gear; TBC Skybreaker Whip/Riding Crop/Carrot plus riding enchants; Retail Masterwork Riding Crop (193475, level 61+); Forever The Desert Rose (274648). No mount gear rules are enabled for MoP.
 - One riding trinket is equipped at a time. The previous equipment is restored after dismount; failed restoration is retained for retry.
-- Mount controls appear only when relevant gear is detected. Alt + Right-Click on the minimap toggles mount-speed trinket swapping.
+- Mount controls appear only when relevant gear is detected. Alt + Click (left or right) on the minimap toggles mount-speed trinket swapping.
 - TBC mages retain Serpent-Coil Braid modes; TBC warriors retain Solarian's Sapphire modes. Options appear for owned, equipped or queued items. Hidden settings are preserved.
 - Tests: `python tests/test_compatibility.py` (requires Python and lupa). Mocked Lua 5.1 checks do not replace in-game testing.
 
