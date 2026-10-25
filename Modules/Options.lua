@@ -41,6 +41,7 @@ function ATS:CreateOptions()
                 return
             end
             db[key] = self:GetChecked()
+            if key == "mountSpeedTrinketsEnabled" then ATS:SetMountSpeedTrinketSwitching(db[key]) end
             if key == "showCooldownNumbers" then
                 ATS:UpdateButtons()
                 if ATS.UpdateMenuCooldowns then ATS:UpdateMenuCooldowns() end
@@ -123,6 +124,7 @@ function ATS:CreateOptions()
     local g9 = CreateCheck(generalBox, "Trinket ready glow", "readyGlowEnabled", gHeader)
     local g10 = CreateCheck(generalBox, "Use mount-speed manager", "useMountSpeedManager", gHeader)
 
+    local g11 = CreateCheck(generalBox, "Swap mount-speed trinkets", "mountSpeedTrinketsEnabled", gHeader)
     -- Reposition into two columns
     local function PlaceCheck(cb, col, row)
         cb:ClearAllPoints()
@@ -135,6 +137,7 @@ function ATS:CreateOptions()
     PlaceCheck(g9, 1, 4)
     PlaceCheck(g4, 1, 5)
     PlaceCheck(g10, 1, 6)
+    PlaceCheck(g11, 2, 6)
     PlaceCheck(gTooltip, 2, 1)
     PlaceCheck(g5, 2, 2)
     PlaceCheck(g6, 2, 3)
@@ -541,7 +544,9 @@ function ATS:CreateOptions()
                 end
                 return bottom
             end
-            local gBottom = lowestBottom(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, gTooltip)
+            local showMount = ATS:HasRelevantMountGear()
+            g10:SetShown(showMount); g11:SetShown(showMount)
+            local gBottom = lowestBottom(g1, g2, g3, g4, g5, g6, g7, g8, g9, gTooltip, showMount and g10, showMount and g11)
             if not gBottom then gBottom = (gHeader:GetBottom() - 60) end
             generalBox:SetHeight(generalBox:GetTop() - gBottom + 16)
 
@@ -587,7 +592,8 @@ function ATS:CreateOptions()
     win:SetFrameStrata("DIALOG")
     win:SetToplevel(true)
     win:SetSize(820, 640)
-    win:SetPoint("CENTER")
+    local pos = db.optionsPos or {}
+    win:SetPoint(pos.point or "CENTER", UIParent, pos.relativePoint or "CENTER", pos.x or 0, pos.y or 0)
     if win.SetBackdrop then
         win:SetBackdrop({
             bgFile = "Interface/Tooltips/UI-Tooltip-Background",
@@ -609,7 +615,10 @@ function ATS:CreateOptions()
     win:SetMovable(true)
     win:RegisterForDrag("LeftButton")
     win:SetScript("OnDragStart", win.StartMoving)
-    win:SetScript("OnDragStop", win.StopMovingOrSizing)
+    win:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        if ATS.SaveFramePosition then ATS:SaveFramePosition(self, "optionsPos") end
+    end)
 
     -- Close button
     local close = CreateFrame("Button", nil, win, "UIPanelCloseButton")

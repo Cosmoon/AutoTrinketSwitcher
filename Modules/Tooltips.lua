@@ -21,7 +21,7 @@ function ATS:GetTooltip()
     if AutoTrinketSwitcherCharDB and AutoTrinketSwitcherCharDB.cleanTooltips then
         if not self.cleanTooltip then
             local template = "GameTooltipTemplate"
-            self.cleanTooltip = CreateFrame("GameTooltip", "ATS_CleanTooltip", UIParent, template)
+            self.cleanTooltip = CreateFrame("GameTooltip", "TS_CleanTooltip", UIParent, template)
             if self.cleanTooltip.HookScript then
                 self.cleanTooltip:HookScript("OnHide", function()
                     ATS.tooltipContext = nil
@@ -49,9 +49,9 @@ function ATS:ShowTooltip(frame, slot)
         local itemID = GetInventoryItemID("player", slot)
         if not itemID then return end
         local tip = SetTooltipOwner(frame)
-        local name = GetItemInfo(itemID)
+        local name = ATS:GetItemInfoSafe(itemID)
         if name then tip:SetText(name) end
-        local _, desc = GetItemSpell(itemID)
+        local _, desc = ATS:GetItemSpellSafe(itemID)
         if desc then tip:AddLine(desc, 1, 1, 1) end
         tip:Show()
     else
@@ -69,9 +69,9 @@ function ATS:ShowItemTooltip(frame, itemID)
     self.tooltipContext = { kind = "item", frame = frame, itemID = itemID }
     if tiny then
         local tip = SetTooltipOwner(frame)
-        local name = GetItemInfo(itemID)
+        local name = ATS:GetItemInfoSafe(itemID)
         if name then tip:SetText(name) end
-        local _, desc = GetItemSpell(itemID)
+        local _, desc = ATS:GetItemSpellSafe(itemID)
         if desc then tip:AddLine(desc, 1, 1, 1) end
         tip:Show()
     else

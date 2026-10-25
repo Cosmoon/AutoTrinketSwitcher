@@ -1,5 +1,9 @@
 local ATS = CreateFrame("Frame", "AutoTrinketSwitcherFrame")
 
+local function IsSecret(value)
+    return issecretvalue and issecretvalue(value) or false
+end
+
 local function NormalizeCooldown(start, duration, enable)
     if type(start) == "table" then
         local info = start
@@ -33,10 +37,12 @@ local function GetInventoryItemCooldownSafe(unit, slot)
 end
 
 local function IsActiveCooldown(start, duration)
+    if IsSecret(start) or IsSecret(duration) then return false end
     return start and duration and start > 0 and duration > 0
 end
 
 local function GetCooldownRemaining(start, duration)
+    if IsSecret(start) or IsSecret(duration) then return math.huge end
     if not start or not duration or start == 0 or duration == 0 then
         return 0
     end
@@ -45,8 +51,38 @@ local function GetCooldownRemaining(start, duration)
     return remaining
 end
 
+local function FormatCooldownText(remaining)
+    if remaining >= 60 then
+        return string.format("%d m", math.ceil(remaining / 60))
+    end
+    return tostring(math.ceil(remaining))
+end
+
 function ATS:GetItemCooldownSafe(itemID)
     return GetItemCooldownSafe(itemID)
+end
+
+function ATS:GetItemInfoSafe(itemInfo)
+    local getter = C_Item and C_Item.GetItemInfo or GetItemInfo
+    if getter then return getter(itemInfo) end
+end
+
+function ATS:GetItemSpellSafe(itemInfo)
+    local getter = C_Item and C_Item.GetItemSpell or GetItemSpell
+    if getter then return getter(itemInfo) end
+end
+
+function ATS:GetItemCountSafe(itemInfo, includeBank)
+    local getter = C_Item and C_Item.GetItemCount or GetItemCount
+    if getter then return getter(itemInfo, includeBank or false) or 0 end
+    return 0
+end
+
+function ATS:GetItemIconSafe(itemInfo)
+    if C_Item and C_Item.GetItemIconByID then
+        return C_Item.GetItemIconByID(itemInfo)
+    end
+    if GetItemIcon then return GetItemIcon(itemInfo) end
 end
 
 function ATS:GetCooldownRemaining(start, duration)
@@ -60,8 +96,9 @@ end
 function ATS:GetSpecialTrinket(itemID)
     local special = itemID and self.SpecialTrinkets and self.SpecialTrinkets[itemID]
     if not special then return nil end
+    if special.clients and not special.clients[AutoTrinketSwitcherCompatibility.client] then return nil end
     if special.class then
-        local _, classTag = UnitClass and UnitClass("player")
+        local _, classTag = UnitClass("player")
         if classTag ~= special.class then return nil end
     end
     return special
@@ -143,8 +180,95 @@ local function NormalizeQueueSet(queue)
     return queue
 end
 
+local EnsureDB
+
+local function NormalizePoint(point, fallback)
+    fallback = fallback or {}
+    if type(point) ~= "table" then point = {} end
+
+    point.point = point.point or fallback.point or "CENTER"
+    point.relativePoint = point.relativePoint or fallback.relativePoint or "CENTER"
+    point.x = tonumber(point.x) or fallback.x or 0
+    point.y = tonumber(point.y) or fallback.y or 0
+    return point
+end
+
+function ATS:SaveFramePosition(frame, key)
+    EnsureDB()
+    if not frame or not key then return end
+
+    local db = AutoTrinketSwitcherCharDB
+    db[key] = NormalizePoint(db[key])
+
+    local frameX, frameY = frame:GetCenter()
+    local parentX, parentY = UIParent:GetCenter()
+    local hasSecretGeometry = issecretvalue and (
+        issecretvalue(frameX) or issecretvalue(frameY) or
+        issecretvalue(parentX) or issecretvalue(parentY)
+    )
+
+    if frameX and frameY and parentX and parentY and not hasSecretGeometry then
+        db[key].point = "CENTER"
+        db[key].relativePoint = "CENTER"
+        db[key].x = frameX - parentX
+        db[key].y = frameY - parentY
+        return
+    end
+
+    local point, _, relativePoint, x, y = frame:GetPoint()
+    if not point then return end
+    db[key].point = point
+    db[key].relativePoint = relativePoint or "CENTER"
+    db[key].x = x or 0
+    db[key].y = y or 0
+end
+
+function ATS:SetButtonFrameHidden(hidden)
+    EnsureDB()
+    hidden = hidden == true
+    AutoTrinketSwitcherCharDB.buttonFrameHidden = hidden
+
+    if self.buttonFrame then
+        if hidden then
+            self.buttonFrame:Hide()
+        else
+            self.buttonFrame:Show()
+        end
+    end
+end
+
+function ATS:SaveCharacterState()
+    EnsureDB()
+
+    if self.buttonFrame then
+        self:SaveFramePosition(self.buttonFrame, "buttonPos")
+    end
+
+    if self.optionsWindow then
+        self:SaveFramePosition(self.optionsWindow, "optionsPos")
+    end
+end
+
+function ATS:ApplyCharacterState()
+    EnsureDB()
+    local db = AutoTrinketSwitcherCharDB
+
+    if self.buttonFrame then
+        local pos = db.buttonPos
+        self.buttonFrame:ClearAllPoints()
+        self.buttonFrame:SetPoint(pos.point, UIParent, pos.relativePoint, pos.x, pos.y)
+        self:SetButtonFrameHidden(db.buttonFrameHidden)
+    end
+
+    if self.optionsWindow then
+        local pos = db.optionsPos
+        self.optionsWindow:ClearAllPoints()
+        self.optionsWindow:SetPoint(pos.point, UIParent, pos.relativePoint, pos.x, pos.y)
+    end
+end
+
 -- Ensure saved variables exist after they are loaded
-local function EnsureDB()
+EnsureDB = function()
     AutoTrinketSwitcherCharDB = AutoTrinketSwitcherCharDB or {}
     local db = AutoTrinketSwitcherCharDB
 
@@ -168,8 +292,6 @@ local function EnsureDB()
     db.queues = db.queueSets[db.activeQueueSet]
     db.menuOnlyOutOfCombat = db.menuOnlyOutOfCombat ~= false
     db.autoSwitch = db.autoSwitch ~= false
-    db.useMountSpeedManager = db.useMountSpeedManager ~= false
-    db.mountSpeedTrinketsEnabled = db.mountSpeedTrinketsEnabled ~= false
     db.readyGlowEnabled = db.readyGlowEnabled ~= false
     db.macroReadyGlowEnabled = db.macroReadyGlowEnabled == true
     db.macroReadyGlowStyle = db.macroReadyGlowStyle == "STEADY" and "STEADY" or "MOVING"
@@ -177,9 +299,6 @@ local function EnsureDB()
     db.readySoundEnabled = db.readySoundEnabled == true
     db.readySound = db.readySound or "Chime"
     db.readySoundVolume = math.max(10, math.min(100, tonumber(db.readySoundVolume) or 70))
-    if ATS.NormalizeSpecialTrinketSettings then
-        ATS:NormalizeSpecialTrinketSettings(db)
-    end
 
     if db.showCooldowns ~= nil and db.showCooldownNumbers == nil then
         db.showCooldownNumbers = db.showCooldowns
@@ -203,13 +322,17 @@ local function EnsureDB()
     db.colors.slot14 = db.colors.slot14 or { r = 1, g = 0.82, b = 0 }
     db.colors.glow   = db.colors.glow   or { r = 1, g = 1, b = 0 }
     db.colors.manualBadge = db.colors.manualBadge or { r = 1, g = 1, b = 1 }
-    db.colors.speedBadge = db.colors.speedBadge or { r = 0, g = 0.8, b = 1 }
     db.colors.readyGlow = db.colors.readyGlow or { r = 1, g = 1, b = 1 }
     db.colors.macroReadyGlow = db.colors.macroReadyGlow or { r = 1, g = 0.82, b = 0 }
-    db.colors.macroReadyGlow13 = db.colors.macroReadyGlow13 or { r = 0.2, g = 1, b = 0.2 }
-    db.colors.macroReadyGlow14 = db.colors.macroReadyGlow14 or { r = 0.2, g = 0.6, b = 1 }
+    db.colors.macroReadySlot13 = db.colors.macroReadySlot13 or { r = 0, g = 1, b = 0 }
+    db.colors.macroReadySlot14 = db.colors.macroReadySlot14 or { r = 0, g = 0.4, b = 1 }
+    -- Preserve the previous custom macro color for the both-ready state.
+    db.colors.macroReadyBoth = db.colors.macroReadyBoth or {
+        r = db.colors.macroReadyGlow.r, g = db.colors.macroReadyGlow.g, b = db.colors.macroReadyGlow.b,
+    }
 
-    db.buttonPos = db.buttonPos or { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 }
+    db.buttonPos = NormalizePoint(db.buttonPos, { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 })
+    db.optionsPos = NormalizePoint(db.optionsPos, { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 })
     db.minimap = db.minimap or { hide = false }
     db.manual = db.manual or { [13] = false, [14] = false }
     db.manualPreferred = db.manualPreferred or { [13] = nil, [14] = nil }
@@ -222,12 +345,12 @@ local function EnsureDB()
     if not db.mountOverrideActive then
         db.mountOverridePrevAutoSwitch = nil
     end
-    db.mountSpeedActive = db.mountSpeedActive or false
-    if not db.mountSpeedActive then
-        db.mountSpeedPrevious = nil
-    else
-        db.mountSpeedPrevious = db.mountSpeedPrevious or {}
-    end
+    db.colors.speedBadge = db.colors.speedBadge or { r = 0, g = 0.8, b = 1 }
+    db.colors.macroReadyGlow13 = db.colors.macroReadyGlow13 or { r = 0.2, g = 1, b = 0.2 }
+    db.colors.macroReadyGlow14 = db.colors.macroReadyGlow14 or { r = 0.2, g = 0.6, b = 1 }
+    db.useMountSpeedManager = db.useMountSpeedManager ~= false
+    db.mountSpeedTrinketsEnabled = db.mountSpeedTrinketsEnabled ~= false
+    if ATS.NormalizeSpecialTrinketSettings then ATS:NormalizeSpecialTrinketSettings(db) end
 end
 
 function ATS:EnsureDB()
@@ -346,7 +469,7 @@ function ATS:RestoreManualTrinket(slot)
     local current = GetInventoryItemID("player", slot)
     if current == itemID then return end
 
-    local count = GetItemCount and GetItemCount(itemID, false) or 1
+    local count = self:GetItemCountSafe(itemID, false)
     if count == 0 then return end
 
     EquipItemSafe(itemID, slot)
@@ -381,6 +504,7 @@ end
 -- Tooltip helpers moved to Modules\Tooltips.lua
 
 local function TrackItemCooldown(itemID, start, duration)
+    if IsSecret(start) or IsSecret(duration) then return end
     if not itemID or not start or not duration or start == 0 or duration == 0 then
         return
     end
@@ -419,31 +543,57 @@ local function QueueIndex(slot, itemID)
 end
 
 -- Helper: does an item have a usable effect?
-local function ItemHasUse(itemID)
-    if not itemID then return false end
-    local special = ATS:GetSpecialTrinket(itemID)
-    if special and special.hasEffectiveUse and special.hasEffectiveUse(ATS, itemID) then
-        return true
+local function GetItemUseSpellName(itemID)
+    if not itemID then return nil end
+    ATS.itemUseSpellCache = ATS.itemUseSpellCache or {}
+
+    local cached = ATS.itemUseSpellCache[itemID]
+    if cached ~= nil then
+        return cached ~= false and cached or nil
     end
-    local useName = GetItemSpell(itemID)
-    return useName ~= nil
+
+    local spellName = ATS:GetItemSpellSafe(itemID)
+    if spellName then
+        ATS.itemUseSpellCache[itemID] = spellName
+        return spellName
+    end
+
+    if ATS:GetItemInfoSafe(itemID) then
+        ATS.itemUseSpellCache[itemID] = false
+    end
+
+    return nil
+end
+
+local function ItemHasUse(itemID)
+    local special = ATS:GetSpecialTrinket(itemID)
+    if special and special.hasEffectiveUse and special.hasEffectiveUse(ATS, itemID) then return true end
+    return GetItemUseSpellName(itemID) ~= nil
 end
 
 local function IsItemEffectActive(itemID)
-    if not itemID then return false end
     local special = ATS:GetSpecialTrinket(itemID)
-    if special and special.isEffectActive and special.isEffectActive(ATS, itemID) then
-        return true
-    end
-    local spellName = GetItemSpell(itemID)
+    if special and special.isEffectActive and special.isEffectActive(ATS, itemID) then return true end
+    if not itemID then return false end
+    local spellName = GetItemUseSpellName(itemID)
     if not spellName then return false end
 
-    if AuraUtil and AuraUtil.FindAuraByName then
-        return AuraUtil.FindAuraByName(spellName, "player", "HELPFUL") ~= nil
+    -- AuraUtil can exist on Classic even when its name lookup API is missing.
+    -- Check the underlying APIs directly instead of using that wrapper.
+    if C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName then
+        return C_UnitAuras.GetAuraDataBySpellName("player", spellName, "HELPFUL") ~= nil
     end
 
     for i = 1, 40 do
-        local name = UnitBuff("player", i)
+        local name
+        if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+            local aura = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+            name = aura and aura.name
+        elseif UnitBuff then
+            name = UnitBuff("player", i)
+        else
+            break
+        end
         if not name then break end
         if name == spellName then return true end
     end
@@ -500,7 +650,7 @@ local function ChooseCandidate(slot, avoidID)
         if itemID ~= avoidID and itemID ~= reservedOther then
             local allowed = true
             -- Skip items not in bags/equipped
-            local count = GetItemCount and GetItemCount(itemID, false) or 1
+            local count = ATS:GetItemCountSafe(itemID, false)
             if count == 0 then allowed = false end
             if allowed then
                 local cd = GetItemRemaining(itemID)
@@ -568,10 +718,6 @@ function ATS:ApplyColorSettings()
             local mb = AutoTrinketSwitcherCharDB.colors.manualBadge
             button.manualBadge:SetTextColor(mb.r, mb.g, mb.b, 1)
         end
-        if button.speedBadge then
-            local sb = AutoTrinketSwitcherCharDB.colors.speedBadge
-            button.speedBadge:SetTextColor(sb.r, sb.g, sb.b, 1)
-        end
     end
 end
 
@@ -620,7 +766,7 @@ local function PendingSwap(slot)
     for _, itemID in ipairs(AutoTrinketSwitcherCharDB.queues[slot]) do
         if itemID ~= equippedID then
             local proceed = true
-            local count = GetItemCount and GetItemCount(itemID, false) or 1
+            local count = ATS:GetItemCountSafe(itemID, false)
             if count == 0 then proceed = false end
             if proceed then
                 local cd = GetItemRemaining(itemID)
@@ -638,11 +784,7 @@ function ATS:PerformCheck()
     -- Periodically ensure mount state is respected even if an event was missed
     if self.UpdateMountState then self:UpdateMountState() end
 
-    if AutoTrinketSwitcherCharDB.useMountSpeedManager == false and self.resumeGuardUntil and GetTime() < self.resumeGuardUntil then
-        self:UpdateButtons()
-        return
-    end
-
+    if AutoTrinketSwitcherCharDB.mountSpeedActive and not self.isMounted then return end
     if AutoTrinketSwitcherCharDB.autoSwitch and not InCombatLockdown() and PlayerCanSwap() then
         local cand13 = ChooseCandidate(13)
         local cand14 = ChooseCandidate(14)
@@ -676,9 +818,125 @@ function ATS:PerformCheck()
     self:UpdateButtons()
 end
 
+function ATS:QueueButtonUpdate(delay)
+    if not self.buttons or self._buttonUpdateQueued then return end
+    self._buttonUpdateQueued = true
+    delay = delay or 0.05
+
+    local function update()
+        if not ATS then return end
+        ATS._buttonUpdateQueued = nil
+        ATS:UpdateButtons()
+    end
+
+    if C_Timer and C_Timer.After then
+        C_Timer.After(delay, update)
+    else
+        update()
+    end
+end
+
+local function UpdateCooldownText(button)
+    if not button or not button.cdText then return false end
+    if not AutoTrinketSwitcherCharDB.showCooldownNumbers then
+        button.cdText:Hide()
+        button._lastCooldownText = nil
+        return false
+    end
+
+    local start, duration = button._cooldownStart, button._cooldownDuration
+    if not IsActiveCooldown(start, duration) then
+        button.cdText:Hide()
+        button._lastCooldownText = nil
+        return false
+    end
+
+    local remaining = start + duration - GetTime()
+    if remaining <= 0 then
+        button.cdText:Hide()
+        button._lastCooldownText = nil
+        return false
+    end
+
+    local text = FormatCooldownText(remaining)
+    if button._lastCooldownText ~= text then
+        button.cdText:SetText(text)
+        button._lastCooldownText = text
+    end
+    button.cdText:Show()
+    return true
+end
+
+function ATS:UpdateCooldownTexts()
+    local hasActiveText = false
+
+    for _, button in pairs(self.buttons or {}) do
+        hasActiveText = UpdateCooldownText(button) or hasActiveText
+    end
+
+    if self.menu and self.menu:IsShown() and self.menu.icons then
+        for _, button in ipairs(self.menu.icons) do
+            hasActiveText = UpdateCooldownText(button) or hasActiveText
+        end
+    end
+
+    return hasActiveText
+end
+
+function ATS:SetCooldownTextUpdater(active)
+    if not AutoTrinketSwitcherCharDB or AutoTrinketSwitcherCharDB.showCooldownNumbers == false then
+        active = false
+    end
+
+    if active and self._cooldownTextUpdaterActive then return end
+    if not active and not self._cooldownTextUpdaterActive then return end
+
+    self._cooldownTextUpdaterActive = active and true or false
+    self._cooldownTextElapsed = 0
+    self._cooldownTextFrame = self._cooldownTextFrame or CreateFrame("Frame")
+
+    if active then
+        self._cooldownTextFrame:SetScript("OnUpdate", function(_, elapsed)
+            ATS._cooldownTextElapsed = (ATS._cooldownTextElapsed or 0) + elapsed
+            if ATS._cooldownTextElapsed < 0.5 then return end
+            ATS._cooldownTextElapsed = 0
+            if not ATS:UpdateCooldownTexts() then
+                ATS:SetCooldownTextUpdater(false)
+            end
+        end)
+    else
+        self._cooldownTextFrame:SetScript("OnUpdate", nil)
+    end
+end
+
+function ATS:StartAutoCheckTicker()
+    if self._autoCheckTicker and self._autoCheckTicker.Cancel then
+        self._autoCheckTicker:Cancel()
+    end
+
+    if C_Timer and C_Timer.NewTicker then
+        self._autoCheckTicker = C_Timer.NewTicker(1, function()
+            if ATS and ATS.PerformCheck then
+                ATS:PerformCheck()
+            end
+        end)
+        return
+    end
+
+    self.elapsed = 0
+    self:SetScript("OnUpdate", function(_, elapsed)
+        self.elapsed = self.elapsed + elapsed
+        if self.elapsed > 1 then
+            self.elapsed = 0
+            self:PerformCheck()
+        end
+    end)
+end
+
 -- Update the icons on the slot buttons
 function ATS:UpdateButtons()
     if not self.buttons then return end
+    local hasActiveCooldownText = false
     for slot, button in pairs(self.buttons) do
         local itemID = GetInventoryItemID("player", slot)
         local texture = GetInventoryItemTexture("player", slot)
@@ -695,6 +953,11 @@ function ATS:UpdateButtons()
             button.glow:Hide()
         end
 
+        if button.speedBadge then
+            local color = AutoTrinketSwitcherCharDB.colors.speedBadge
+            button.speedBadge:SetTextColor(color.r, color.g, color.b, 1)
+            button.speedBadge:SetShown(AutoTrinketSwitcherCharDB.mountSpeedTrinketsEnabled == false)
+        end
         -- Mount/ready indication reuse the same highlight frame
         if button.mountGlow then
             local mountOverrideActive = (self.mountAutoModified == true) or (AutoTrinketSwitcherCharDB and AutoTrinketSwitcherCharDB.mountOverrideActive)
@@ -718,51 +981,35 @@ function ATS:UpdateButtons()
             if isManualSlot then button.manualBadge:Show() else button.manualBadge:Hide() end
         end
 
-        if button.speedBadge then
-            if AutoTrinketSwitcherCharDB.mountSpeedTrinketsEnabled == false then
-                button.speedBadge:Show()
-            else
-                button.speedBadge:Hide()
-            end
-        end
-
         -- Handle cooldown overlay and text
         if itemID then
             local fallbackStart, fallbackDuration, fallbackEnable = GetInventoryItemCooldownSafe("player", slot)
             local start, duration, _, sourceItemID = self:GetDisplayItemCooldown(itemID, fallbackStart, fallbackDuration, fallbackEnable)
+            button._cooldownStart = start
+            button._cooldownDuration = duration
             TrackItemCooldown(sourceItemID or itemID, start, duration)
             if IsActiveCooldown(start, duration) then
                 button.cooldown:SetCooldown(start, duration)
                 button.cooldown:Show()
-                if AutoTrinketSwitcherCharDB.showCooldownNumbers then
-                    local remaining = start + duration - GetTime()
-                    if remaining > 0 then
-                        if remaining >= 60 then
-                            button.cdText:SetText(string.format("%d m", math.ceil(remaining / 60)))
-                        else
-                            button.cdText:SetText(math.ceil(remaining))
-                        end
-                        button.cdText:Show()
-                    else
-                        button.cdText:Hide()
-                    end
-                else
-                    button.cdText:Hide()
-                end
+                hasActiveCooldownText = UpdateCooldownText(button) or hasActiveCooldownText
             else
                 button.cooldown:Hide()
                 button.cdText:Hide()
+                button._lastCooldownText = nil
             end
         else
             button.cooldown:Hide()
             button.cdText:Hide()
+            button._cooldownStart = nil
+            button._cooldownDuration = nil
+            button._lastCooldownText = nil
         end
     end
     if self.menu and self.menu:IsShown() then
         self:UpdateMenuCooldowns()
+        hasActiveCooldownText = self:UpdateCooldownTexts() or hasActiveCooldownText
     end
-    -- Keep minimap icon in sync with slot 13
-    if self.UpdateMinimapIcon then self:UpdateMinimapIcon() end
+    self:SetCooldownTextUpdater(hasActiveCooldownText)
 end
 
 -- Create the two slot buttons
@@ -771,7 +1018,7 @@ function ATS:CreateButtons()
 
     -- Container frame around the buttons so players can see where to drag
     local template = BackdropTemplateMixin and "BackdropTemplate" or nil
-    local frame = CreateFrame("Frame", "ATSButtons", UIParent, template)
+    local frame = CreateFrame("Frame", "TSButtons", UIParent, template)
     frame:SetSize(84, 60)
     local pos = AutoTrinketSwitcherCharDB.buttonPos or {}
     frame:SetPoint(pos.point or "CENTER", UIParent, pos.relativePoint or "CENTER", pos.x or 0, pos.y or 0)
@@ -781,11 +1028,7 @@ function ATS:CreateButtons()
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
-        local point, _, relativePoint, x, y = self:GetPoint()
-        AutoTrinketSwitcherCharDB.buttonPos.point = point
-        AutoTrinketSwitcherCharDB.buttonPos.relativePoint = relativePoint
-        AutoTrinketSwitcherCharDB.buttonPos.x = x
-        AutoTrinketSwitcherCharDB.buttonPos.y = y
+        ATS:SaveFramePosition(self, "buttonPos")
     end)
 
     -- Add a subtle backdrop so the drag area is visible
@@ -802,11 +1045,7 @@ function ATS:CreateButtons()
     end
 
     self.buttonFrame = frame
-    if AutoTrinketSwitcherCharDB.buttonFrameHidden then
-        frame:Hide()
-    else
-        frame:Show()
-    end
+    self:SetButtonFrameHidden(AutoTrinketSwitcherCharDB.buttonFrameHidden)
 
     self.queueSetButtons = {}
     for index = 1, 2 do
@@ -829,6 +1068,7 @@ function ATS:CreateButtons()
 
         btn:RegisterForClicks(self:GetTrinketClickBinding())
         btn:EnableMouse(true)
+        btn:SetAttribute("useOnKeyDown", UseActionKeyDown())
         local macroText = "/use " .. tostring(slot)
         btn:SetAttribute("type", "macro")
         btn:SetAttribute("type1", "macro")
@@ -868,6 +1108,12 @@ function ATS:CreateButtons()
         btn.mountGlow:SetSize(64, 64)
         btn.mountGlow:Hide()
 
+        btn.speedBadge = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        btn.speedBadge:SetPoint("BOTTOMRIGHT", -2, 2)
+        btn.speedBadge:SetText("S")
+        btn.speedBadge:SetTextColor(0, 0.8, 1, 1)
+        btn.speedBadge:Hide()
+
         -- Manual mode badge (bottom-left)
         btn.manualBadge = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         btn.manualBadge:SetPoint("BOTTOMLEFT", 2, 2)
@@ -875,13 +1121,6 @@ function ATS:CreateButtons()
         btn.manualBadge:SetTextColor(1, 1, 1, 1)
         btn.manualBadge:SetDrawLayer("OVERLAY", 8)
         btn.manualBadge:Hide()
-
-        btn.speedBadge = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        btn.speedBadge:SetPoint("BOTTOMRIGHT", -2, 2)
-        btn.speedBadge:SetText("S")
-        btn.speedBadge:SetTextColor(0, 0.8, 1, 1)
-        btn.speedBadge:SetDrawLayer("OVERLAY", 8)
-        btn.speedBadge:Hide()
 
         btn.slot = slot
 
@@ -906,6 +1145,19 @@ function ATS:CreateButtons()
     self:UpdateLockState()
     self:UpdateQueueSetButtons()
     self:UpdateTrinketClickBinding()
+end
+
+function ATS:ADDON_LOADED(addonName)
+    if addonName ~= "AutoTrinketSwitcher" then return end
+    if AutoTrinketSwitcherMirror and AutoTrinketSwitcherCompatibility.client == "FOREVER" then
+        AutoTrinketSwitcherCharDB = AutoTrinketSwitcherMirror:Load(AutoTrinketSwitcherCharDB) or {}
+    end
+    EnsureDB()
+    if AutoTrinketSwitcherMirror and AutoTrinketSwitcherCompatibility.client == "FOREVER" then
+        AutoTrinketSwitcherMirror:Watch(AutoTrinketSwitcherCharDB)
+    end
+    self.savedVariablesReady = true
+    self:UnregisterEvent("ADDON_LOADED")
 end
 
 function ATS:PLAYER_LOGIN()
@@ -961,24 +1213,19 @@ function ATS:PLAYER_LOGIN()
     self:CreateOptions()
     self:CreateButtons()
     self:CreateMinimapButton()
-    self:StartReadyAlerts()
-    self.elapsed = 0
-    self.cdElapsed = 0
+    self:ApplyCharacterState()
+    if C_Timer and C_Timer.After then
+        C_Timer.After(0, function()
+            if ATS and ATS.ApplyCharacterState then
+                ATS:ApplyCharacterState()
+            end
+        end)
+    end
     self.mountAutoModified = false
     self.prevAutoSwitch = nil
     self.isMounted = false
-    self:SetScript("OnUpdate", function(_, e)
-        self.elapsed = self.elapsed + e
-        self.cdElapsed = self.cdElapsed + e
-        if self.elapsed > 1 then
-            self.elapsed = 0
-            self:PerformCheck()
-        end
-        if self.cdElapsed > 0.1 then
-            self.cdElapsed = 0
-            self:UpdateButtons()
-        end
-    end)
+    self:StartAutoCheckTicker()
+    self:StartReadyAlerts()
     -- Clear tooltip context if tooltip is hidden by any external cause
     if GameTooltip and GameTooltip.HookScript then
         GameTooltip:HookScript("OnHide", function()
@@ -988,8 +1235,9 @@ function ATS:PLAYER_LOGIN()
     -- Initialize mount state
     if self.UpdateMountState then self:UpdateMountState() end
 
-    -- Slash command: /ats and /ats help show quick usage help
+    -- Slash command: /ats and /autotrinketswitcher show quick usage help
     SLASH_AUTOTRINKETSWITCHER1 = "/ats"
+    SLASH_AUTOTRINKETSWITCHER2 = "/autotrinketswitcher"
     SlashCmdList["AUTOTRINKETSWITCHER"] = function(msg)
         local function out(text)
             DEFAULT_CHAT_FRAME:AddMessage(text)
@@ -1009,18 +1257,18 @@ function ATS:PLAYER_LOGIN()
             end
             if which == "13" then
                 clear(13)
-                header("Auto Trinket Switcher")
+                header("AutoTrinketSwitcher")
                 bullet("Cleared queue for slot 13")
             elseif which == "14" then
                 clear(14)
-                header("Auto Trinket Switcher")
+                header("AutoTrinketSwitcher")
                 bullet("Cleared queue for slot 14")
             elseif which == "both" or which == "all" then
                 clear(13); clear(14)
-                header("Auto Trinket Switcher")
+                header("AutoTrinketSwitcher")
                 bullet("Cleared queues for slot 13 and 14")
             else
-                header("Auto Trinket Switcher")
+                header("AutoTrinketSwitcher")
                 bullet("Usage: /ats clear 13 | 14 | both")
             end
             if ATS.menu and ATS.menu:IsShown() and ATS.menu.anchor then ATS:ShowMenu(ATS.menu.anchor) end
@@ -1029,7 +1277,7 @@ function ATS:PLAYER_LOGIN()
         end
 
         -- Help
-        header("Auto Trinket Switcher")
+        header("AutoTrinketSwitcher")
         bullet("Hover: Shows menu; also shows tooltip if enabled")
         bullet("Left-click: Use Trinket")
         bullet("Shift + Left/Right-Click: Add/Remove trinket to the priority queue (Left = slot 13, Right = slot 14)")
@@ -1038,25 +1286,59 @@ function ATS:PLAYER_LOGIN()
     end
 end
 
-ATS:RegisterEvent("PLAYER_LOGIN")
-ATS:RegisterEvent("PLAYER_REGEN_ENABLED")
-ATS:RegisterEvent("UNIT_AURA")
-ATS:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
-ATS:RegisterEvent("PLAYER_ENTERING_WORLD")
-ATS:RegisterEvent("ZONE_CHANGED")
-ATS:RegisterEvent("ZONE_CHANGED_INDOORS")
-ATS:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-ATS:RegisterEvent("MODIFIER_STATE_CHANGED")
--- Talent-change events across Classic/Wrath variants
-ATS:RegisterEvent("CHARACTER_POINTS_CHANGED")
-ATS:RegisterEvent("PLAYER_TALENT_UPDATE")
-ATS:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
-ATS:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-ATS:RegisterEvent("CVAR_UPDATE")
+function ATS:PLAYER_LOGOUT()
+    self:SaveCharacterState()
+    if AutoTrinketSwitcherMirror and AutoTrinketSwitcherCompatibility.client == "FOREVER" then
+        AutoTrinketSwitcherMirror:Flush()
+    end
+end
+
+local function RegisterEventSafe(event)
+    pcall(ATS.RegisterEvent, ATS, event)
+end
+
+for _, event in ipairs({
+    "ADDON_LOADED",
+    "PLAYER_LOGIN",
+    "PLAYER_LOGOUT",
+    "PLAYER_REGEN_ENABLED",
+    "PLAYER_REGEN_DISABLED",
+    "UNIT_AURA",
+    "PLAYER_EQUIPMENT_CHANGED",
+    "BAG_UPDATE_DELAYED",
+    "BAG_UPDATE_COOLDOWN",
+    "ACTIONBAR_UPDATE_COOLDOWN",
+    "SPELL_UPDATE_COOLDOWN",
+    "ITEM_LOCK_CHANGED",
+    "PLAYER_MOUNT_DISPLAY_CHANGED",
+    "PLAYER_ENTERING_WORLD",
+    "ZONE_CHANGED",
+    "ZONE_CHANGED_INDOORS",
+    "ZONE_CHANGED_NEW_AREA",
+    "MODIFIER_STATE_CHANGED",
+    "CHARACTER_POINTS_CHANGED",
+    "PLAYER_TALENT_UPDATE",
+    "ACTIVE_TALENT_GROUP_CHANGED",
+    "PLAYER_SPECIALIZATION_CHANGED",
+    "ACTIVE_PLAYER_SPECIALIZATION_CHANGED",
+    "TRAIT_CONFIG_UPDATED",
+    "CVAR_UPDATE",
+}) do
+    RegisterEventSafe(event)
+end
 ATS:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_REGEN_ENABLED" then
         self:PerformCheck()
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        self:QueueButtonUpdate()
+    elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "BAG_UPDATE_DELAYED" or event == "ITEM_LOCK_CHANGED" then
+        self:QueueButtonUpdate()
+        if self.RefreshSpecialTrinketOptions then self:RefreshSpecialTrinketOptions() end
+    elseif event == "BAG_UPDATE_COOLDOWN" or event == "ACTIONBAR_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_COOLDOWN" then
+        self:QueueButtonUpdate()
     elseif event == "UNIT_AURA" then
+        local unit = ...
+        if unit and unit ~= "player" then return end
         -- React to mount state changes via aura changes
         self:UpdateMountState()
     elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
@@ -1066,7 +1348,8 @@ ATS:SetScript("OnEvent", function(self, event, ...)
     elseif event == "CHARACTER_POINTS_CHANGED" then
         -- Talent points can change many times during a respec; wait for the sequence to settle.
         self:QueueTalentConfigurationChanged()
-    elseif event == "PLAYER_TALENT_UPDATE" or event == "ACTIVE_TALENT_GROUP_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" then
+    elseif event == "PLAYER_TALENT_UPDATE" or event == "ACTIVE_TALENT_GROUP_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED"
+        or event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" or event == "TRAIT_CONFIG_UPDATED" then
         local arg1, arg2 = ...
         if event == "ACTIVE_TALENT_GROUP_CHANGED" then
             local currentGroup = tonumber(arg1)
@@ -1077,17 +1360,23 @@ ATS:SetScript("OnEvent", function(self, event, ...)
                 self.lastKnownTalentGroup = previousGroup
             end
         end
-        if event ~= "PLAYER_SPECIALIZATION_CHANGED" or arg1 == nil or arg1 == "player" then
-            local delay = (event == "ACTIVE_TALENT_GROUP_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED") and 0.35 or nil
+        local isUnitEvent = event == "PLAYER_SPECIALIZATION_CHANGED" or event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED"
+        if not isUnitEvent or arg1 == nil or arg1 == "player" then
+            local delay = (event == "ACTIVE_TALENT_GROUP_CHANGED" or isUnitEvent or event == "TRAIT_CONFIG_UPDATED") and 0.35 or nil
             self:QueueTalentConfigurationChanged(delay)
         end
     elseif event == "CVAR_UPDATE" then
         local cvar = ...
         if cvar == "ActionButtonUseKeyDown" then
             self:UpdateTrinketClickBinding()
+            if not InCombatLockdown() then
+                for _, button in pairs(self.buttons or {}) do
+                    button:SetAttribute("useOnKeyDown", UseActionKeyDown())
+                end
+            end
         end
     elseif self[event] then
-        self[event](self)
+        self[event](self, ...)
     end
 end)
 
@@ -1143,6 +1432,9 @@ function ATS:UpdateMountState()
         if db.mountSpeedActive or db.mountSpeedPrevious then
             if self:RestoreMountSpeedGear() then
                 refreshButtons = true
+            else
+                self.isMounted = false
+                return -- Keep the override until every saved slot has been restored.
             end
         end
 
@@ -1204,7 +1496,7 @@ function ATS:PruneMissingFromQueues()
             local i = 1
             while i <= #q do
                 local id = q[i]
-                local count = GetItemCount and GetItemCount(id, false) or 1
+                local count = self:GetItemCountSafe(id, false)
                 local eq13 = GetInventoryItemID("player", 13)
                 local eq14 = GetInventoryItemID("player", 14)
                 if count == 0 and id ~= eq13 and id ~= eq14 then

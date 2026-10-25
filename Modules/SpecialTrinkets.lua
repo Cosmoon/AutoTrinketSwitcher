@@ -4,45 +4,18 @@ ATS.SpecialTrinkets = ATS.SpecialTrinkets or {}
 
 local SERPENT_COIL_BRAID_ID = 30720
 local MANA_SURGE_SPELL_ID = 37445
+local MANA_SURGE_FALLBACK_NAME = "Mana Surge"
+local TRINKET_SLOTS = {13, 14}
 local SOLARIAN_SAPPHIRE_ID = 30446
 local BATTLE_SHOUT_SPELL_ID = 6673
 local MANA_GEM_IDS = {
     22044, -- Mana Emerald
-    8008,  -- Mana Ruby
-    8007,  -- Mana Citrine
-    5513,  -- Mana Jade
-    5514,  -- Mana Agate
 }
 
 local SERPENT_COIL_MODES = {
-    MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION = "MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION",
-    MANA_SURGE_DISPLAY_MANA_GEM_ROTATION = "MANA_SURGE_DISPLAY_MANA_GEM_ROTATION",
-    MANA_GEM_DISPLAY_MANA_GEM_ROTATION = "MANA_GEM_DISPLAY_MANA_GEM_ROTATION",
-    MANA_GEM_DISPLAY_MANA_SURGE_ROTATION = "MANA_GEM_DISPLAY_MANA_SURGE_ROTATION",
-}
-
-local SERPENT_COIL_SOURCES = {
-    MANA_SURGE = "MANA_SURGE",
-    MANA_GEM = "MANA_GEM",
-}
-
-local SERPENT_COIL_MODE_SOURCES = {
-    [SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION] = {
-        display = SERPENT_COIL_SOURCES.MANA_SURGE,
-        rotation = SERPENT_COIL_SOURCES.MANA_SURGE,
-    },
-    [SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_GEM_ROTATION] = {
-        display = SERPENT_COIL_SOURCES.MANA_SURGE,
-        rotation = SERPENT_COIL_SOURCES.MANA_GEM,
-    },
-    [SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_GEM_ROTATION] = {
-        display = SERPENT_COIL_SOURCES.MANA_GEM,
-        rotation = SERPENT_COIL_SOURCES.MANA_GEM,
-    },
-    [SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_SURGE_ROTATION] = {
-        display = SERPENT_COIL_SOURCES.MANA_GEM,
-        rotation = SERPENT_COIL_SOURCES.MANA_SURGE,
-    },
+    OFF = "OFF",
+    DISPLAY_ONLY = "DISPLAY_ONLY",
+    ROTATION = "ROTATION",
 }
 
 local SOLARIAN_MODES = {
@@ -60,43 +33,42 @@ local function IsValidSpecialTrinketMode(itemID, mode)
     return false
 end
 
-local function PlayerHasAuraBySpell(spellID, fallbackName)
+local function FindPlayerAura(spellID, fallbackName)
+    if UnitBuff and spellID then
+        for i = 1, 40 do
+            local name, _, _, _, duration, expirationTime, _, _, _, auraSpellID = UnitBuff("player", i)
+            if not name then break end
+            if auraSpellID == spellID then
+                return true, duration, expirationTime
+            end
+        end
+    end
+
     local spellName = (GetSpellInfo and GetSpellInfo(spellID)) or fallbackName
     if not spellName then return false end
 
     if AuraUtil and AuraUtil.FindAuraByName then
-        return AuraUtil.FindAuraByName(spellName, "player", "HELPFUL") ~= nil
+        local name, _, _, _, duration, expirationTime = AuraUtil.FindAuraByName(spellName, "player", "HELPFUL")
+        if not name then return false end
+        return true, duration, expirationTime
     end
 
-    for i = 1, 40 do
-        local name = UnitBuff("player", i)
-        if not name then break end
-        if name == spellName then return true end
+    if UnitBuff then
+        for i = 1, 40 do
+            local name, _, _, _, duration, expirationTime = UnitBuff("player", i)
+            if not name then break end
+            if name == spellName then
+                return true, duration, expirationTime
+            end
+        end
     end
 
     return false
 end
 
 local function GetPlayerAuraCooldownBySpell(spellID, fallbackName, fallbackDuration)
-    local spellName = (GetSpellInfo and GetSpellInfo(spellID)) or fallbackName
-    if not spellName then return nil, nil, nil, false end
-
-    local duration, expirationTime
-    if AuraUtil and AuraUtil.FindAuraByName then
-        local name, icon, count, dispelType, auraDuration, auraExpirationTime = AuraUtil.FindAuraByName(spellName, "player", "HELPFUL")
-        if not name then return nil, nil, nil, false end
-        duration, expirationTime = auraDuration, auraExpirationTime
-    else
-        for i = 1, 40 do
-            local name, icon, count, dispelType, auraDuration, auraExpirationTime = UnitBuff("player", i)
-            if not name then break end
-            if name == spellName then
-                duration, expirationTime = auraDuration, auraExpirationTime
-                break
-            end
-        end
-        if not duration and not expirationTime then return nil, nil, nil, false end
-    end
+    local found, duration, expirationTime = FindPlayerAura(spellID, fallbackName)
+    if not found then return nil, nil, nil, false end
 
     duration = duration or fallbackDuration or 0
     expirationTime = expirationTime or 0
@@ -107,6 +79,34 @@ local function GetPlayerAuraCooldownBySpell(spellID, fallbackName, fallbackDurat
     local remaining = expirationTime - GetTime()
     if remaining <= 0 then return 0, 0, 0, true end
     return expirationTime - duration, duration, 1, true
+end
+
+-- Mana Surge state -----------------------------------------------------------------
+
+-- Returns active, remaining. A found-but-permanent aura is reported inactive on
+-- purpose: Mana Surge is a 15s timed buff, so anything without an expiry is a passive
+-- and must never be allowed to hold the braid in place indefinitely.
+function ATS:GetManaSurgeInfo()
+    local found, duration, expirationTime = FindPlayerAura(MANA_SURGE_SPELL_ID, MANA_SURGE_FALLBACK_NAME)
+    if not found then return false, 0 end
+
+    duration = duration or 0
+    expirationTime = expirationTime or 0
+    if duration <= 0 or expirationTime <= 0 then return false, 0 end
+
+    local remaining = expirationTime - GetTime()
+    if remaining <= 0 then return false, 0 end
+    return true, remaining
+end
+
+function ATS:IsManaSurgeActive()
+    local active = self:GetManaSurgeInfo()
+    return active
+end
+
+function ATS:GetManaSurgeRemaining()
+    local _, remaining = self:GetManaSurgeInfo()
+    return remaining or 0
 end
 
 function ATS:GetManaGemCooldown()
@@ -137,6 +137,12 @@ function ATS:GetManaGemCooldown()
     return nil, nil, nil, nil, false
 end
 
+function ATS:GetManaGemRemaining()
+    local start, duration, _, _, hasSource = self:GetManaGemCooldown()
+    if not hasSource then return nil end
+    return self:GetCooldownRemaining(start or 0, duration or 0)
+end
+
 function ATS:GetManaSurgeCooldown(itemID)
     local start, duration, enable, hasAura = GetPlayerAuraCooldownBySpell(MANA_SURGE_SPELL_ID, "Mana Surge", 15)
     if hasAura then
@@ -153,85 +159,175 @@ function ATS:GetBattleShoutDurationCooldown()
     return 0, 0, 0
 end
 
-local function GetSerpentCoilCooldown(self, itemID, source)
-    if source == SERPENT_COIL_SOURCES.MANA_SURGE then
-        return self:GetManaSurgeCooldown(itemID)
-    end
-    if source == SERPENT_COIL_SOURCES.MANA_GEM then
-        return self:GetManaGemCooldown()
-    end
-end
-
-local function GetSerpentCoilSources(mode)
-    return SERPENT_COIL_MODE_SOURCES[mode]
-end
-
 local function MigrateSerpentCoilMode(mode)
     if IsValidSpecialTrinketMode(SERPENT_COIL_BRAID_ID, mode) then return mode end
-    if mode == "DISPLAY_ONLY" or mode == "ROTATION" then
-        return SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_GEM_ROTATION
-    end
+    return SERPENT_COIL_MODES.ROTATION
 end
+
+local MANA_EMERALD_COOLDOWN = 120
+
+-- ChooseCandidate treats a queued item with 30 seconds or less remaining as selectable,
+-- which normally buys an on-use trinket time to clear its 30s equip lockout. The braid
+-- has no such lockout - the gem is usable the instant it lands - so it needs no head
+-- start. Padding the reported cooldown by that threshold makes the braid come back
+-- exactly as the emerald comes up instead of 30 seconds early, which hands those 30
+-- seconds back to whatever trinket is covering the gap.
+local QUEUE_READY_THRESHOLD = 30
+-- Seconds before the emerald is ready that the braid should be back. Raise this if you
+-- want a buffer for being stuck in combat at the moment the gem comes off cooldown.
+local BRAID_RETURN_LEAD = 0
+
+local function GetBraidEquippedSlot()
+    for _, slot in ipairs(TRINKET_SLOTS) do
+        if GetInventoryItemID and GetInventoryItemID("player", slot) == SERPENT_COIL_BRAID_ID then
+            return slot
+        end
+    end
+    return nil
+end
+
+function ATS:UpdateSerpentCoilState()
+    local state = self.serpentCoilState
+    if not state then
+        state = { surgeActive = false, yielded = false, yieldStarted = 0 }
+        self.serpentCoilState = state
+    end
+
+    local active = self:IsManaSurgeActive()
+
+    if active then
+        -- Buff is up: hold the braid and clear any pending yield.
+        if not state.surgeActive then
+            -- Mana Surge going up IS the gem use, so this is the exact moment the
+            -- emerald's own cooldown started.
+            state.gemUsedAt = GetTime()
+        end
+        state.surgeActive = true
+        state.yielded = false
+        state.yieldStarted = 0
+        return state
+    end
+
+    if state.surgeActive then
+        state.surgeActive = false
+        -- Only yield the slot if the braid is the thing actually sitting in it.
+        if GetBraidEquippedSlot() then
+            state.yielded = true
+            state.yieldStarted = GetTime()
+        end
+    end
+
+    return state
+end
+
+-- Seconds until the braid should be considered available again. 0 means available now.
+function ATS:GetSerpentCoilYieldRemaining()
+    local state = self:UpdateSerpentCoilState()
+    if not state.yielded then return 0 end
+
+    local remaining = 0
+
+    -- Prefer the real Mana Emerald cooldown when the client reports one.
+    local gemRemaining = self:GetManaGemRemaining()
+    if gemRemaining and gemRemaining > 0 then
+        remaining = gemRemaining
+    end
+
+    -- Wall-clock backstop for when the item cooldown is unreadable or reads as ready.
+    -- Measured from the gem use (when Mana Surge went up), not from the surge expiring,
+    -- so the backstop lines up with the real cooldown instead of overshooting by the
+    -- 15 seconds the buff was running.
+    local since = GetTime() - (state.gemUsedAt or state.yieldStarted or 0)
+    local fallback = MANA_EMERALD_COOLDOWN - since
+    if fallback > remaining then remaining = fallback end
+
+    remaining = remaining - BRAID_RETURN_LEAD
+    if remaining <= 0 then
+        state.yielded = false
+        state.yieldStarted = 0
+        return 0
+    end
+
+    return remaining
+end
+
+function ATS:IsSerpentCoilYielded()
+    return self:GetSerpentCoilYieldRemaining() > 0
+end
+
 
 ATS.SpecialTrinkets[SERPENT_COIL_BRAID_ID] = {
     name = "Serpent-Coil Braid",
     class = "MAGE",
-    defaultMode = SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION,
+    clients = { TBC = true },
+    -- Rotation is the default so the Mana Surge hold is live out of the box.
+    defaultMode = SERPENT_COIL_MODES.ROTATION,
     modeOrder = {
-        SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION,
-        SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_GEM_ROTATION,
-        SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_GEM_ROTATION,
-        SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_SURGE_ROTATION,
+        SERPENT_COIL_MODES.OFF,
+        SERPENT_COIL_MODES.DISPLAY_ONLY,
+        SERPENT_COIL_MODES.ROTATION,
     },
     modeLabels = {
-        [SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION] = "Mana Surge CD shown; switch by Mana Surge",
-        [SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_GEM_ROTATION] = "Mana Surge CD shown; switch by mana gem",
-        [SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_GEM_ROTATION] = "Mana gem CD shown; switch by mana gem",
-        [SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_SURGE_ROTATION] = "Mana gem CD shown; switch by Mana Surge",
+        [SERPENT_COIL_MODES.OFF] = "Off (no Mana Surge hold, no rotation)",
+        [SERPENT_COIL_MODES.DISPLAY_ONLY] = "Show Mana Emerald cooldown only",
+        [SERPENT_COIL_MODES.ROTATION] = "Hold for Mana Surge, rotate on Mana Emerald",
     },
 
     getDisplayCooldown = function(self, itemID)
         local mode = self:GetSpecialTrinketMode(itemID)
-        local sources = GetSerpentCoilSources(mode)
-        if not sources then return nil end
+        if mode == SERPENT_COIL_MODES.OFF then return nil end
 
-        local start, duration, enable, sourceItemID, hasSource = GetSerpentCoilCooldown(self, itemID, sources.display)
+        local start, duration, enable, sourceItemID, hasSource = self:GetManaGemCooldown()
         if hasSource then
             return start or 0, duration or 0, enable, sourceItemID
         end
     end,
 
+    -- Readiness for rotation purposes. Once Mana Surge has expired the braid reports a
+    -- live cooldown so the queue skips it and moves to the next trinket in order; that
+    -- cooldown winds down to zero as the Mana Emerald comes back, which is what pulls
+    -- the braid back into the same slot.
     getEffectiveCooldown = function(self, itemID)
-        local sources = GetSerpentCoilSources(self:GetSpecialTrinketMode(itemID))
-        if not sources then return nil end
+        if self:GetSpecialTrinketMode(itemID) ~= SERPENT_COIL_MODES.ROTATION then return nil end
 
-        local start, duration, enable, sourceItemID, hasSource = GetSerpentCoilCooldown(self, itemID, sources.rotation)
+        local yieldRemaining = self:GetSerpentCoilYieldRemaining()
+        if yieldRemaining > 0 then
+            -- Pad past the selection threshold so the braid is not picked early.
+            return GetTime(), yieldRemaining + QUEUE_READY_THRESHOLD, 1, itemID
+        end
+
+        local start, duration, enable, sourceItemID, hasSource = self:GetManaGemCooldown()
         if hasSource then
             return start or 0, duration or 0, enable, sourceItemID
         end
+
+        return 0, 0, 0, itemID
     end,
 
+    -- Treat the braid as a "use" trinket so the effect-active hold below is honoured.
+    -- Mana Surge being up qualifies on its own, which keeps the hold working even on
+    -- the last gem charge, when the emerald has already left the bags.
     hasEffectiveUse = function(self, itemID)
-        local sources = GetSerpentCoilSources(self:GetSpecialTrinketMode(itemID))
-        if not sources then return false end
-
-        local _, _, _, _, hasSource = GetSerpentCoilCooldown(self, itemID, sources.rotation)
-        return hasSource or (
-            sources.rotation == SERPENT_COIL_SOURCES.MANA_SURGE
-            and PlayerHasAuraBySpell(MANA_SURGE_SPELL_ID, "Mana Surge")
-        )
+        if self:GetSpecialTrinketMode(itemID) ~= SERPENT_COIL_MODES.ROTATION then return false end
+        if self:IsManaSurgeActive() then return true end
+        if self:IsSerpentCoilYielded() then return true end
+        local _, _, _, _, hasSource = self:GetManaGemCooldown()
+        return hasSource
     end,
 
+    -- While Mana Surge (37445) is on the player, the braid stays in its slot. When it
+    -- falls off, the slot is free and the next queued trinket takes over.
     isEffectActive = function(self, itemID)
-        local sources = GetSerpentCoilSources(self:GetSpecialTrinketMode(itemID))
-        if not sources or sources.rotation ~= SERPENT_COIL_SOURCES.MANA_SURGE then return false end
-        return PlayerHasAuraBySpell(MANA_SURGE_SPELL_ID, "Mana Surge")
+        if self:GetSpecialTrinketMode(itemID) ~= SERPENT_COIL_MODES.ROTATION then return false end
+        return self:IsManaSurgeActive()
     end,
+
 }
 
 ATS.SpecialTrinkets[SOLARIAN_SAPPHIRE_ID] = {
     name = "Solarian's Sapphire",
     class = "WARRIOR",
+    clients = { TBC = true },
     defaultMode = SOLARIAN_MODES.ROTATION,
     modeOrder = {
         SOLARIAN_MODES.OFF,
@@ -271,7 +367,7 @@ function ATS:NormalizeSpecialTrinketSettings(db)
     if db.serpentCoilMode ~= nil or db.showSerpentCoilManaGemCooldown ~= nil then
         local mode = MigrateSerpentCoilMode(db.serpentCoilMode)
         if not mode then
-            mode = SERPENT_COIL_MODES.MANA_GEM_DISPLAY_MANA_GEM_ROTATION
+            mode = SERPENT_COIL_MODES.ROTATION
         end
         db.specialTrinketModes[SERPENT_COIL_BRAID_ID] = mode
     elseif db.specialTrinketModes[SERPENT_COIL_BRAID_ID] ~= nil
@@ -333,7 +429,7 @@ function ATS:SetSpecialTrinketMode(itemID, mode)
 end
 
 function ATS:GetSerpentCoilMode()
-    return self:GetSpecialTrinketMode(SERPENT_COIL_BRAID_ID) or SERPENT_COIL_MODES.MANA_SURGE_DISPLAY_MANA_SURGE_ROTATION
+    return self:GetSpecialTrinketMode(SERPENT_COIL_BRAID_ID) or SERPENT_COIL_MODES.ROTATION
 end
 
 function ATS:SetSerpentCoilMode(mode)
@@ -370,12 +466,6 @@ function ATS:GetDetectedSpecialTrinketIDs()
             for _, itemID in ipairs(db.queues[queueSlot] or {}) do
                 AddSpecialTrinketID(out, seen, itemID)
             end
-        end
-    end
-
-    if db and db.specialTrinketModes then
-        for itemID in pairs(db.specialTrinketModes) do
-            AddSpecialTrinketID(out, seen, itemID)
         end
     end
 

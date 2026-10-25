@@ -9,16 +9,10 @@ function ATS:OnMinimapClick(mouse)
 
     if mouse == "LeftButton" then
         if self.buttonFrame then
-            if self.buttonFrame:IsShown() then
-                self.buttonFrame:Hide()
-                AutoTrinketSwitcherCharDB.buttonFrameHidden = true
-            else
-                self.buttonFrame:Show()
-                AutoTrinketSwitcherCharDB.buttonFrameHidden = false
-            end
+            self:SetButtonFrameHidden(self.buttonFrame:IsShown())
         end
     elseif mouse == "RightButton" then
-        if IsAltKeyDown() then
+        if IsAltKeyDown() and self:HasRelevantMountGear() then
             self:ToggleMountSpeedTrinketSwitching()
         elseif IsShiftKeyDown() then
             AutoTrinketSwitcherCharDB.lockWindows = not AutoTrinketSwitcherCharDB.lockWindows
@@ -54,7 +48,9 @@ function ATS:OnMinimapTooltipShow(tooltip)
     tooltip:AddLine(line("Right-Click:", "Open Option Menu"))
     tooltip:AddLine(line("Ctrl + Right-Click:", "Toggle Auto Switching"))
     tooltip:AddLine(line("Shift + Right-Click:", "Lock/Unlock Buttons"))
-    tooltip:AddLine(line("Alt + Right-Click:", "Toggle Mount-Speed Trinkets"))
+    if self:HasRelevantMountGear() then
+        tooltip:AddLine(line("Alt + Right-Click:", "Toggle mount-speed trinket swapping"))
+    end
     tooltip:Show()
 end
 
@@ -112,7 +108,7 @@ function ATS:CreateMinimapButton()
         return
     end
 
-    local btn = CreateFrame("Button", "ATS_MinimapButton", Minimap)
+    local btn = CreateFrame("Button", "TS_MinimapButton", Minimap)
     btn:SetSize(32, 32)
     btn:SetFrameStrata("HIGH")
     btn:ClearAllPoints()

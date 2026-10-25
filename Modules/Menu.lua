@@ -1,5 +1,9 @@
 local ATS = AutoTrinketSwitcherFrame
 
+local function IsSecret(value)
+    return issecretvalue and issecretvalue(value) or false
+end
+
 local function NormalizeCooldown(start, duration, enable)
     if type(start) == "table" then
         local info = start
@@ -33,7 +37,7 @@ local function ScanTrinkets()
             for slot = 1, (getSlots(bag) or 0) do
                 local itemID = getItemID(bag, slot)
                 if itemID then
-                    local _, _, _, _, _, _, _, _, equipLoc = GetItemInfo(itemID)
+                    local _, _, _, _, _, _, _, _, equipLoc = ATS:GetItemInfoSafe(itemID)
                     if equipLoc == "INVTYPE_TRINKET" and not seen[itemID] then
                         table.insert(trinkets, itemID)
                         seen[itemID] = true
@@ -75,7 +79,7 @@ function ATS:ShowMenu(anchor)
     if AutoTrinketSwitcherCharDB.menuOnlyOutOfCombat and InCombatLockdown() then return end
     if not self.menu then
         local template = BackdropTemplateMixin and "BackdropTemplate" or nil
-        self.menu = CreateFrame("Frame", "ATSMenu", UIParent, template)
+        self.menu = CreateFrame("Frame", "TSMenu", UIParent, template)
         self.menu:SetFrameStrata("DIALOG")
         self.menu:SetSize(200, 50)
         self.menu.icons = {}
@@ -103,7 +107,7 @@ function ATS:ShowMenu(anchor)
     -- Sorting
     local mode = AutoTrinketSwitcherCharDB.menuSortMode or "QUEUED_FIRST"
     local function alphaKey(id)
-        local name = GetItemInfo(id) or ""
+        local name = ATS:GetItemInfoSafe(id) or ""
         return name:upper()
     end
     local function groupAndPos(id)
@@ -120,8 +124,8 @@ function ATS:ShowMenu(anchor)
             if na == nb then return a < b end
             return na < nb
         elseif mode == "ILEVEL" then
-            local la = select(4, GetItemInfo(a)) or 0
-            local lb = select(4, GetItemInfo(b)) or 0
+            local la = select(4, ATS:GetItemInfoSafe(a)) or 0
+            local lb = select(4, ATS:GetItemInfoSafe(b)) or 0
             if la == lb then
                 local na, nb = alphaKey(a), alphaKey(b)
                 if na == nb then return a < b end
@@ -162,7 +166,7 @@ function ATS:ShowMenu(anchor)
 
         btn.icon = btn.icon or btn:CreateTexture(nil, "BACKGROUND")
         btn.icon:SetAllPoints(true)
-        btn.icon:SetTexture(GetItemIcon(itemID) or 134400)
+        btn.icon:SetTexture(ATS:GetItemIconSafe(itemID) or 134400)
         btn.itemID = itemID
 
 
@@ -362,7 +366,9 @@ function ATS:UpdateMenuCooldowns()
         else
             start, duration = GetItemCooldownSafe(btn.itemID)
         end
-        if start and duration and start > 0 and duration > 0 then
+        if not IsSecret(start) and not IsSecret(duration) and start and duration and start > 0 and duration > 0 then
+            btn._cooldownStart = start
+            btn._cooldownDuration = duration
             btn.cooldown:SetCooldown(start, duration)
             btn.cooldown:Show()
             if AutoTrinketSwitcherCharDB.showCooldownNumbers then
@@ -381,9 +387,15 @@ function ATS:UpdateMenuCooldowns()
                 btn.cdText:Hide()
             end
         else
+            btn._cooldownStart = nil
+            btn._cooldownDuration = nil
+            btn._lastCooldownText = nil
             btn.cooldown:Hide()
             btn.cdText:Hide()
         end
+    end
+    if self.SetCooldownTextUpdater and self.UpdateCooldownTexts and self:UpdateCooldownTexts() then
+        self:SetCooldownTextUpdater(true)
     end
 end
 

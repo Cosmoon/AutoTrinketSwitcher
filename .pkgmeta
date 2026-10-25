@@ -1,0 +1,13 @@
+package-as: AutoTrinketSwitcher
+enable-nolib-creation: no
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - tests
+  - tools
+  - AGENTS.md
+  - DEVELOPMENT.md
+  - __pycache__

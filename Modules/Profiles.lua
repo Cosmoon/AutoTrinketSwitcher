@@ -226,6 +226,13 @@ function ATS:ComputeTalentSignature()
     local _, classTag = UnitClass and UnitClass("player")
     classTag = classTag or "UNKNOWN"
 
+    if C_ClassTalents and C_ClassTalents.GetActiveConfigID then
+        local ok, configID = pcall(C_ClassTalents.GetActiveConfigID)
+        if ok and configID then
+            return string.format("%s:CONFIG:%s", classTag, tostring(configID))
+        end
+    end
+
     local tabs = {}
     local group = GetActiveTalentGroupSafe()
     if GetNumTalentTabs and GetTalentInfo and GetNumTalents then

@@ -1,15 +1,15 @@
 local ATS = AutoTrinketSwitcherFrame
 
-local MOUNT_SPEED_TRINKETS = {
-    { itemID = 11122 }, -- Carrot on a Stick
-    { itemID = 25653 }, -- Riding Crop
-    { itemID = 32863 }, -- Skybreaker Whip
+local client = AutoTrinketSwitcherCompatibility.client
+local catalogs = {
+    CLASSIC = { { itemID = 11122 } },
+    TBC = { { itemID = 32863 }, { itemID = 25653 }, { itemID = 11122 } },
+    RETAIL = { { itemID = 193475, minLevel = 61 } }, -- Masterwork Riding Crop
+    FOREVER = { { itemID = 274648 } }, -- The Desert Rose
 }
-local MOUNT_SPEED_TRINKET_IDS = {
-    [11122] = true,
-    [25653] = true,
-    [32863] = true,
-}
+local MOUNT_SPEED_TRINKETS = catalogs[client] or {}
+local MOUNT_SPEED_TRINKET_IDS = {}
+for _, item in ipairs(MOUNT_SPEED_TRINKETS) do MOUNT_SPEED_TRINKET_IDS[item.itemID] = true end
 local MOUNT_SPEED_TRINKET_SLOTS = { 13, 14 }
 local MOUNT_SPEED_HAND_SLOT = 10
 local MOUNT_SPEED_FEET_SLOT = 8
@@ -26,6 +26,8 @@ local MOUNT_SPEED_ARMOR = {
         patterns = { "mithril spurs", "mounted speed", "mount speed" },
     },
 }
+
+if client ~= "CLASSIC" and client ~= "TBC" then MOUNT_SPEED_ARMOR = {} end
 
 local function CanSwap()
     return ATS and ATS.PlayerCanSwap and ATS:PlayerCanSwap()
@@ -84,8 +86,8 @@ end
 
 local function GetItemEquipLocSafe(item)
     local equipLoc
-    if GetItemInfo then
-        equipLoc = select(9, GetItemInfo(item))
+    if ATS.GetItemInfoSafe then
+        equipLoc = select(9, ATS:GetItemInfoSafe(item))
     end
     if not equipLoc and GetItemInfoInstant then
         equipLoc = select(4, GetItemInfoInstant(item))
@@ -236,9 +238,10 @@ local function RestoreMountSpeedSlots(db, slots)
         if target and target ~= false then
             local targetID = GetItemIDFromLinkOrID(target)
             local currentID = GetInventoryItemID("player", slot)
-            if not targetID or currentID ~= targetID then
+            if not targetID or currentID ~= targetID or (type(target) == "string" and GetInventoryItemLink("player", slot) ~= target) then
                 EquipItem(target, slot)
                 MarkMountSpeedEquip(slot)
+                restored = GetInventoryItemLink("player", slot) == target or (type(target) == "number" and GetInventoryItemID("player", slot) == target)
             end
         elseif target == false then
             restored = UnequipInventorySlot(slot)
@@ -281,8 +284,9 @@ function ATS:EquipMountSpeedGear()
             end
         end
 
+        local hasSpeedTrinket = next(equippedSpeedTrinkets) ~= nil
         for _, trinket in ipairs(MOUNT_SPEED_TRINKETS) do
-            if not equippedSpeedTrinkets[trinket.itemID] and #targetTrinketSlots > 0 then
+            if not hasSpeedTrinket and #targetTrinketSlots > 0 and (not trinket.minLevel or UnitLevel("player") >= trinket.minLevel) then
                 local item = FindBagItemByID(trinket.itemID)
                 if item then
                     local slot = table.remove(targetTrinketSlots, 1)
@@ -292,6 +296,7 @@ function ATS:EquipMountSpeedGear()
                     MarkMountSpeedEquip(slot)
                     equippedSpeedTrinkets[trinket.itemID] = true
                     changed = true
+                    hasSpeedTrinket = true
                 end
             end
         end
@@ -322,7 +327,7 @@ function ATS:RestoreMountSpeedGear()
     if InCombatLockdown and InCombatLockdown() then return false end
 
     RestoreMountSpeedSlots(db, MOUNT_SPEED_RESTORE_SLOTS)
-    return true
+    return not db.mountSpeedActive
 end
 
 function ATS:RestoreMountSpeedTrinkets()
@@ -372,4 +377,19 @@ function ATS:OnMountSpeedManagerOptionChanged(enabled)
     end
 
     if self.UpdateButtons then self:UpdateButtons() end
+end
+
+-- Called when opening options, not on every frame.
+function ATS:HasRelevantMountGear()
+    if AutoTrinketSwitcherCharDB and AutoTrinketSwitcherCharDB.mountSpeedPrevious then return true end
+    for _, item in ipairs(MOUNT_SPEED_TRINKETS) do
+        if self:GetItemCountSafe(item.itemID) > 0 then return true end
+        for _, slot in ipairs(MOUNT_SPEED_TRINKET_SLOTS) do
+            if GetInventoryItemID("player", slot) == item.itemID then return true end
+        end
+    end
+    for slot, config in pairs(MOUNT_SPEED_ARMOR) do
+        if InventoryItemHasMountSpeedEnchant(slot, config) or FindMountSpeedArmor(config) then return true end
+    end
+    return false
 end
