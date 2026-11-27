@@ -49,6 +49,8 @@ function ATS:OnMinimapTooltipShow(tooltip)
     tooltip:AddLine(line("Right-Click:", "Open Option Menu"))
     tooltip:AddLine(line("Ctrl + Click:", "Toggle Auto Switching"))
     tooltip:AddLine(line("Shift + Click:", "Lock/Unlock Buttons"))
+    local galloping = self:GetGiftOfGallopingStatus()
+    if galloping then tooltip:AddLine(line("Gift of Galloping:", galloping)) end
     if self:HasRelevantMountGear() then
         tooltip:AddLine(line("Alt + Click:", "Toggle mount-speed trinket swapping"))
     end
