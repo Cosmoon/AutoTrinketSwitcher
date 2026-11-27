@@ -2,6 +2,12 @@
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
+## 2.4.0 - 2026-11-27
+- Expanded Forever’s mount-speed manager to stack Carrot on a Stick with The Desert Rose in desert zones and detect Riding Skill gloves and Mithril Spurs boots.
+- Added zone-aware switching for Wintersaber Hide Lined Gloves, Agamaggan’s Clutch, and the Blessing of Kalimdor and Rider of the Plaguelands two-piece bonuses.
+- Added an opt-in setting for two-handed zone-speed weapons. The manager restores your original gear as you change zones or dismount.
+- The minimap tooltip shows Gift of Galloping when it’s active or in your bags. Use the consumable manually.
+
 ## 2.3.2 - 2026-10-25
 - Fixed manual-mode trinket selection: left-click equips slot 13 and right-click equips slot 14 when the selected slot is in manual mode, even while auto switching is enabled. The selected trinket is remembered as the manual preference.
 
