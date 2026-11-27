@@ -47,8 +47,10 @@ Notes
 - The trinket menu can be configured to appear only out of combat.
 - Tiny tooltips, ALT full tooltips, and clean isolated tooltips can be configured in Options.
 - Supports Classic, TBC, MoP, Retail and Forever through automatic client detection.
-- Mount gear: Classic riding gear; TBC Skybreaker Whip/Riding Crop/Carrot plus riding enchants; Retail Masterwork Riding Crop (193475, level 61+); Forever The Desert Rose (274648). No mount gear rules are enabled for MoP.
-- One riding trinket is equipped at a time. The previous equipment is restored after dismount; failed restoration is retained for retry.
+- Mount gear: Classic riding gear; TBC Skybreaker Whip/Riding Crop/Carrot plus riding enchants; Retail Masterwork Riding Crop (193475, level 61+); Forever Carrot on a Stick, The Desert Rose, Riding Skill gloves, Mithril Spurs boots, and zone-specific gear. No mount gear rules are enabled for MoP.
+- Forever can equip Carrot on a Stick and The Desert Rose together in desert zones. Other clients equip at most one riding trinket. The mount-speed manager restores previous gear after dismount and retries failed restorations.
+- While mounted in Forever, the manager also checks for Wintersaber Hide Lined Gloves, Agamaggan's Clutch, and two distinct pieces of Blessing of Kalimdor or Rider of the Plaguelands in their respective zones. Enable **Swap two-handed zone weapons** to include Staff of Westfall, Forsaken Greataxe and Gnarled Necromancer's Staff.
+- The Forever minimap tooltip shows Gift of Galloping when the buff is active or the consumable is in your bags. Use the consumable manually.
 - Mount controls appear only when relevant gear is detected. Alt + Click (left or right) on the minimap toggles mount-speed trinket swapping.
 - TBC mages retain Serpent-Coil Braid modes; TBC warriors retain Solarian's Sapphire modes. Options appear for owned, equipped or queued items. Hidden settings are preserved.
 - Tests: `python tests/test_compatibility.py` (requires Python and lupa). Mocked Lua 5.1 checks do not replace in-game testing.
