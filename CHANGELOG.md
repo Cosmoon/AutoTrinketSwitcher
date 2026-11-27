@@ -2,6 +2,12 @@
 
 All notable changes to AutoTrinketSwitcher are documented here.
 
+## 2.4.1 - 2026-11-27
+- Forever detects additional speed gear from English tooltips and checks zone restrictions before equipping it.
+- The mount-speed manager can equip up to two speed rings and checks bag gear for binding and wearability before swapping.
+- The two-handed weapon option appears when the addon detects eligible weapons and defaults to off.
+- A one-time chat reminder appears when Gift of Galloping is in your bags and its buff is inactive.
+
 ## 2.4.0 - 2026-11-27
 - Expanded Forever’s mount-speed manager to stack Carrot on a Stick with The Desert Rose in desert zones and detect Riding Skill gloves and Mithril Spurs boots.
 - Added zone-aware switching for Wintersaber Hide Lined Gloves, Agamaggan’s Clutch, and the Blessing of Kalimdor and Rider of the Plaguelands two-piece bonuses.
