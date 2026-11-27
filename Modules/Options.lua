@@ -42,6 +42,7 @@ function ATS:CreateOptions()
             end
             db[key] = self:GetChecked()
             if key == "mountSpeedTrinketsEnabled" then ATS:SetMountSpeedTrinketSwitching(db[key]) end
+            if key == "mountSpeedWeaponsEnabled" then ATS:UpdateMountState() end
             if key == "showCooldownNumbers" then
                 ATS:UpdateButtons()
                 if ATS.UpdateMenuCooldowns then ATS:UpdateMenuCooldowns() end
@@ -125,6 +126,10 @@ function ATS:CreateOptions()
     local g10 = CreateCheck(generalBox, "Use mount-speed manager", "useMountSpeedManager", gHeader)
 
     local g11 = CreateCheck(generalBox, "Swap mount-speed trinkets", "mountSpeedTrinketsEnabled", gHeader)
+    local g12
+    if AutoTrinketSwitcherCompatibility.client == "FOREVER" then
+        g12 = CreateCheck(generalBox, "Swap two-handed zone weapons", "mountSpeedWeaponsEnabled", gHeader)
+    end
     -- Reposition into two columns
     local function PlaceCheck(cb, col, row)
         cb:ClearAllPoints()
@@ -138,6 +143,7 @@ function ATS:CreateOptions()
     PlaceCheck(g4, 1, 5)
     PlaceCheck(g10, 1, 6)
     PlaceCheck(g11, 2, 6)
+    if g12 then PlaceCheck(g12, 1, 7) end
     PlaceCheck(gTooltip, 2, 1)
     PlaceCheck(g5, 2, 2)
     PlaceCheck(g6, 2, 3)
@@ -546,7 +552,8 @@ function ATS:CreateOptions()
             end
             local showMount = ATS:HasRelevantMountGear()
             g10:SetShown(showMount); g11:SetShown(showMount)
-            local gBottom = lowestBottom(g1, g2, g3, g4, g5, g6, g7, g8, g9, gTooltip, showMount and g10, showMount and g11)
+            if g12 then g12:SetShown(showMount) end
+            local gBottom = lowestBottom(g1, g2, g3, g4, g5, g6, g7, g8, g9, gTooltip, showMount and g10, showMount and g11, showMount and g12)
             if not gBottom then gBottom = (gHeader:GetBottom() - 60) end
             generalBox:SetHeight(generalBox:GetTop() - gBottom + 16)
 
