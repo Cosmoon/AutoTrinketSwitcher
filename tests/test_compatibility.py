@@ -40,7 +40,7 @@ for interface, expected in [(11509,'CLASSIC'),(20506,'TBC'),(50504,'MOP'),(12010
     lua=runtime(interface)
     assert lua.globals().AutoTrinketSwitcherCompatibility.client==expected
     assert lua.eval('AutoTrinketSwitcherFrame:GetSpecialTrinket(30720) ~= nil') == (expected=='TBC')
-    lua.execute('bags={193475,274648}; AutoTrinketSwitcherFrame:EquipMountSpeedGear()')
+    lua.execute('bags={193475,274648}; C_Map={GetBestMapForUnit=function() return 1446 end}; AutoTrinketSwitcherFrame:EquipMountSpeedGear()')
     equipped=lua.globals().inventory[13]
     assert equipped == ({'RETAIL':193475,'FOREVER':274648}.get(expected,100))
     if expected in ['RETAIL','FOREVER']:
@@ -74,6 +74,66 @@ lua.execute("""
     assert(existing.specialTrinketModes[30720]=="DISPLAY_ONLY")
 """)
 print('Existing AutoTrinketSwitcher settings preserved; beta settings ignored OK')
+
+lua=runtime(16001)
+lua.execute('''
+    local ats = AutoTrinketSwitcherFrame
+    local db = AutoTrinketSwitcherCharDB
+    local mapID = 1413
+    C_Map = {GetBestMapForUnit = function() return mapID end}
+    function GetItemInfoInstant(item)
+        local itemID = tonumber(tostring(item):match("item:(%d+)")) or item
+        return itemID, nil, nil, ({[901] = "INVTYPE_HAND", [902] = "INVTYPE_FEET"})[itemID]
+    end
+    C_Container.GetContainerItemLink = function(_, slot)
+        local id = bags[slot]
+        return "item:" .. id .. (({[901] = ":930", [902] = ":464"})[id] or "")
+    end
+    inventory[2], inventory[8], inventory[10], inventory[11], inventory[12], inventory[15] = 201, 208, 210, 211, 212, 215
+    bags = {11122, 274648, 284266, 901, 902, 6693, 285329, 285330, 284100, 284101, 284102, 2042, 271871}
+    assert(ats:HasRelevantMountGear())
+    assert(ats:GetGiftOfGallopingStatus() == "In bags (use manually)")
+    C_UnitAuras = {GetPlayerAuraBySpellID = function(id) if id == 1289654 then return {} end end}
+    assert(ats:GetGiftOfGallopingStatus() == "Active (+10% mounted speed)")
+    assert(ats:EquipMountSpeedGear())
+    assert(inventory[13] == 11122 and inventory[14] == 274648)
+    assert(inventory[11] == 285330 and inventory[12] == 6693 and inventory[15] == 285329)
+    assert(inventory[10] == 901 and inventory[8] == 902)
+
+    mapID = 1452
+    assert(ats:EquipMountSpeedGear())
+    assert(inventory[13] == 11122 and inventory[14] == 200)
+    assert(inventory[11] == 211 and inventory[12] == 212 and inventory[15] == 215)
+    assert(inventory[10] == 284266 and inventory[8] == 902)
+
+    mapID = 1422
+    assert(ats:EquipMountSpeedGear())
+    assert(inventory[10] == 901)
+    assert(inventory[15] == 284100 and inventory[11] == 284102 and not inventory[16])
+    assert(ats:RestoreMountSpeedGear())
+    assert(inventory[8] == 208 and inventory[10] == 210 and inventory[13] == 100)
+    assert(inventory[11] == 211 and inventory[15] == 215)
+
+    mapID = 1436
+    bags = {2042}
+    inventory[16], inventory[17] = 216, 217
+    assert(not ats:EquipMountSpeedGear())
+    db.mountSpeedWeaponsEnabled = true
+    local equip = ats.EquipItemSafe
+    ats.EquipItemSafe = function(self, item, slot)
+        equip(self, item, slot)
+        if slot == 16 and inventory[16] == 2042 then inventory[17] = nil end
+    end
+    assert(ats:EquipMountSpeedGear())
+    assert(inventory[16] == 2042 and not inventory[17])
+    combat = true
+    assert(not ats:RestoreMountSpeedGear())
+    combat = false
+    assert(ats:RestoreMountSpeedGear())
+    assert(inventory[16] == 216 and inventory[17] == 217)
+''')
+print('Forever zone transitions, stacked trinkets, enchants, sets, consumable status and weapon restoration OK')
+
 lua=LuaRuntime(unpack_returned_tuples=True)
 for p in list(ROOT.glob('*.lua'))+list((ROOT/'Modules').glob('*.lua')):
     ok,error=lua.eval('function(s,n) local f,e=loadstring(s,n); return f~=nil,e end')(p.read_text(encoding='utf-8-sig'),str(p))
