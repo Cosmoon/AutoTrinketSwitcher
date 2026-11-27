@@ -5,7 +5,7 @@ local catalogs = {
     CLASSIC = { { itemID = 11122 } },
     TBC = { { itemID = 32863 }, { itemID = 25653 }, { itemID = 11122 } },
     RETAIL = { { itemID = 193475, minLevel = 61 } }, -- Masterwork Riding Crop
-    FOREVER = { { itemID = 11122 }, { itemID = 274648 } },
+    FOREVER = { { itemID = 274648 }, { itemID = 11122 } }, -- The Desert Rose, Carrot on a Stick
 }
 local MOUNT_SPEED_TRINKETS = catalogs[client] or {}
 local MOUNT_SPEED_TRINKET_IDS = {}
@@ -13,7 +13,8 @@ for _, item in ipairs(MOUNT_SPEED_TRINKETS) do MOUNT_SPEED_TRINKET_IDS[item.item
 local MOUNT_SPEED_TRINKET_SLOTS = { 13, 14 }
 local MOUNT_SPEED_HAND_SLOT = 10
 local MOUNT_SPEED_FEET_SLOT = 8
-local MOUNT_SPEED_RESTORE_SLOTS = { 13, 14, 10, 8 }
+-- Every slot mount-speed gear may use; main hand (16) before off hand (17) so restores work.
+local MOUNT_SPEED_RESTORE_SLOTS = { 1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17, 18 }
 local MOUNT_SPEED_ARMOR = {
     [MOUNT_SPEED_HAND_SLOT] = {
         equipLoc = "INVTYPE_HAND",
@@ -27,34 +28,7 @@ local MOUNT_SPEED_ARMOR = {
     },
 }
 
-if client == "FOREVER" then
-    MOUNT_SPEED_RESTORE_SLOTS = { 13, 14, 10, 8, 2, 11, 12, 15, 16, 17 }
-elseif client ~= "CLASSIC" and client ~= "TBC" then
-    MOUNT_SPEED_ARMOR = {}
-end
-
-local foreverZones = {
-    desert = { [1446] = true, [1451] = true, [1443] = true, [1441] = true, [1413] = true,
-        [1411] = true, [1454] = true, [1418] = true, [1419] = true, [1436] = true },
-    winterspring = { [1452] = true },
-    clutch = { [1413] = true, [1441] = true },
-    kalimdor = { [1413] = true, [1442] = true },
-    plaguelands = { [1422] = true, [1423] = true },
-    westfall = { [1429] = true, [1436] = true, [1433] = true },
-    forsaken = { [1421] = true, [1424] = true },
-}
-local foreverInstances = { [36] = "westfall", [47] = "clutch", [129] = "clutch", [209] = "desert" }
-local foreverGear = {
-    -- Each group selects this many distinct pieces. Slot order breaks ties.
-    { count = 1, zone = "winterspring", { 284266, { 10 }, 54 } },
-    { count = 1, zone = "clutch", { 6693, { 12, 11 }, 30 } },
-    { count = 2, zone = "kalimdor", { 285329, { 15 }, 16 }, { 285331, { 2 }, 20 }, { 285330, { 11, 12 }, 18 } },
-    { count = 2, zone = "plaguelands", { 284100, { 15 }, 57 }, { 284102, { 11, 12 }, 57 }, { 284101, { 16 }, 57 } },
-    { count = 1, zone = "westfall", weapon = true, { 2042, { 16 } } },
-    { count = 1, zone = "forsaken", weapon = true, { 251533, { 16 } }, { 251534, { 16 } } },
-}
-local GALLOPING_ITEM_ID = 271871
-local GALLOPING_SPELL_ID = 1289654
+if client ~= "CLASSIC" and client ~= "TBC" then MOUNT_SPEED_ARMOR = {} end
 
 local function CanSwap()
     return ATS and ATS.PlayerCanSwap and ATS:PlayerCanSwap()
@@ -161,7 +135,6 @@ end
 
 local function BagItemHasMountSpeedEnchant(bag, slot, itemLink, config)
     if LinkHasEnchant(itemLink, config.enchantIDs) then return true end
-    if client == "FOREVER" then return false end
 
     local tip = GetMountSpeedScanTooltip()
     tip:ClearLines()
@@ -174,9 +147,6 @@ end
 local function InventoryItemHasMountSpeedEnchant(invSlot, config)
     local itemLink = GetInventoryItemLink and GetInventoryItemLink("player", invSlot)
     if LinkHasEnchant(itemLink, config.enchantIDs) then return true end
-    if client == "FOREVER" then return false end
-
-    if client == "FOREVER" then return false end
 
     local tip = GetMountSpeedScanTooltip()
     tip:ClearLines()
@@ -266,9 +236,7 @@ local function RestoreMountSpeedSlots(db, slots)
     for _, slot in ipairs(slots) do
         local target = previous[slot]
         local restored = true
-        if slot == 17 and previous[16] ~= nil then
-            restored = false
-        elseif target and target ~= false then
+        if target and target ~= false then
             local targetID = GetItemIDFromLinkOrID(target)
             local currentID = GetInventoryItemID("player", slot)
             if not targetID or currentID ~= targetID or (type(target) == "string" and GetInventoryItemLink("player", slot) ~= target) then
@@ -296,124 +264,521 @@ local function RestoreMountSpeedSlots(db, slots)
     end
 end
 
-local function GetForeverZoneContext()
-    local instanceType, instanceID
+-- ---------------------------------------------------------------------------
+-- WoW Forever speed gear.
+-- Known Forever items are matched by item ID and their zones by map/instance ID
+-- (works in every client language). Anything else that says "mount speed" or
+-- "movement speed ... in <zone>" in its tooltip is picked up as a fallback.
+-- Zone items are worn only while their zone (or set) condition holds.
+-- ---------------------------------------------------------------------------
+local IS_FOREVER = client == "FOREVER"
+
+-- uiMapIDs (parent maps are walked, so sub-zones count) and instance IDs per zone key.
+local FOREVER_ZONES = {
+    desert = { 1411, 1413, 1418, 1419, 1441, 1443, 1446, 1451, 1454 }, -- Durotar, Barrens, Badlands, Blasted Lands, Thousand Needles, Desolace, Tanaris, Silithus, Orgrimmar
+    winterspring = { 1452 },
+    clutch = { 1413, 1441 },        -- The Barrens, Thousand Needles
+    kalimdor = { 1413, 1442 },      -- The Barrens, Stonetalon Mountains
+    plaguelands = { 1422, 1423 },   -- Western and Eastern Plaguelands
+    westfall = { 1429, 1436, 1433 },-- Elwynn Forest, Westfall, Redridge Mountains
+    forsaken = { 1421, 1424 },      -- Silverpine Forest, Hillsbrad Foothills
+}
+local FOREVER_INSTANCES = {
+    [36] = { westfall = true },                     -- The Deadmines
+    [47] = { clutch = true }, [129] = { clutch = true }, -- Razorfen Kraul, Razorfen Downs
+    [209] = { desert = true }, [70] = { desert = true }, -- Zul'Farrak, Uldaman
+    [509] = { desert = true }, [531] = { desert = true }, -- Ruins / Temple of Ahn'Qiraj
+}
+for key, list in pairs(FOREVER_ZONES) do
+    local set = {}
+    for _, mapID in ipairs(list) do set[mapID] = true end
+    FOREVER_ZONES[key] = set
+end
+
+local FOREVER_KNOWN = {
+    [11122] = { group = 13, score = 3 },                                    -- Carrot on a Stick
+    [274648] = { group = 13, score = 7, zone = "desert", minLevel = 42 },   -- The Desert Rose
+    [284266] = { group = 10, score = 5, zone = "winterspring", minLevel = 54 }, -- Wintersaber Hide Lined Gloves
+    [6693] = { group = 11, score = 3, zone = "clutch", minLevel = 30 },     -- Agamaggan's Clutch
+    [2042] = { group = 16, score = 4, zone = "westfall" },                  -- Staff of Westfall
+    [251533] = { group = 16, score = 4, zone = "forsaken" },                -- Forsaken Greataxe
+    [251534] = { group = 16, score = 4, zone = "forsaken" },                -- Gnarled Necromancer's Staff
+    -- Blessing of Kalimdor (2-piece: movement speed in The Barrens and Stonetalon Mountains)
+    [285329] = { group = 15, set = "blessing of kalimdor", need = 2, score = 5, zone = "kalimdor", minLevel = 16 },
+    [285330] = { group = 11, set = "blessing of kalimdor", need = 2, score = 5, zone = "kalimdor", minLevel = 18 },
+    [285331] = { group = 2, set = "blessing of kalimdor", need = 2, score = 5, zone = "kalimdor", minLevel = 20 },
+    -- Rider of the Plaguelands (2-piece: Eastern and Western Plaguelands)
+    [284100] = { group = 15, set = "rider of the plaguelands", need = 2, score = 5, zone = "plaguelands", minLevel = 57 },
+    [284101] = { group = 16, set = "rider of the plaguelands", need = 2, score = 5, zone = "plaguelands", minLevel = 57 },
+    [284102] = { group = 11, set = "rider of the plaguelands", need = 2, score = 5, zone = "plaguelands", minLevel = 57 },
+}
+local FOREVER_ENCHANTS = {
+    [930] = 2, -- Enchant Gloves - Riding Skill
+    [464] = 4, -- Mithril Spurs
+}
+local GALLOPING_ITEM_ID = 271871
+local GALLOPING_SPELL_ID = 1289654
+
+local EQUIPLOC_GROUP = {
+    INVTYPE_HEAD = 1, INVTYPE_NECK = 2, INVTYPE_SHOULDER = 3, INVTYPE_CLOAK = 15,
+    INVTYPE_CHEST = 5, INVTYPE_ROBE = 5, INVTYPE_WRIST = 9, INVTYPE_HAND = 10,
+    INVTYPE_WAIST = 6, INVTYPE_LEGS = 7, INVTYPE_FEET = 8, INVTYPE_FINGER = 11,
+    INVTYPE_TRINKET = 13, INVTYPE_2HWEAPON = 16, INVTYPE_WEAPON = 16, INVTYPE_WEAPONMAINHAND = 16,
+}
+local SLOTS_BY_GROUP = { [11] = { 11, 12 }, [13] = { 13, 14 } }
+local function GroupSlots(group) return SLOTS_BY_GROUP[group] or { group } end
+
+local function NormalizeText(text)
+    local s = text:lower():gsub("[,%.:;!%(%)]", " ")
+    s = s:gsub("%s+", " ")
+    return " " .. s .. " "
+end
+
+-- Fallback "... in <Area> areas" groups for tooltip-detected items (English zone names).
+local AREA_GROUPS = {
+    desert = { "Badlands", "Blasted Lands", "Desolace", "Durotar", "Silithus", "Tanaris", "The Barrens",
+        "Thousand Needles", "Ahn'Qiraj", "Gates of Ahn'Qiraj", "Orgrimmar", "Ruins of Ahn'Qiraj",
+        "Temple of Ahn'Qiraj", "Uldaman", "Zul'Farrak" },
+    snowy = { "Dun Morogh", "Alterac Mountains", "Winterspring", "Alterac Valley" },
+    swamp = { "Dustwallow Marsh", "Swamp of Sorrows", "Wetlands", "Darkshore", "Feralas", "Un'Goro Crater",
+        "Riverglades", "Wailing Caverns", "Maraudon", "The Temple of Atal'Hakkar", "The Drowned City",
+        "Excavation Site: Wetlands", "The Shaper's Terrace" },
+    haunted = { "Eastern Plaguelands", "Western Plaguelands", "Tirisfal Glades", "Silverpine Forest",
+        "Stratholme", "Undercity" },
+}
+for group, zones in pairs(AREA_GROUPS) do
+    local set = {}
+    for _, zone in ipairs(zones) do set[NormalizeText(zone)] = true end
+    AREA_GROUPS[group] = set
+end
+
+local function GetWhere()
+    local where = { names = {} }
+    local function add(name)
+        if type(name) == "string" and name ~= "" then where.names[#where.names + 1] = NormalizeText(name) end
+    end
+    if GetRealZoneText then add(GetRealZoneText()) end
+    if GetZoneText then add(GetZoneText()) end
+    if GetSubZoneText then add(GetSubZoneText()) end
     if GetInstanceInfo then
-        local _, kind, _, _, _, _, _, id = GetInstanceInfo()
-        instanceType, instanceID = kind, id
+        local name, instanceType, _, _, _, _, _, instanceID = GetInstanceInfo()
+        add(name)
+        if instanceType and instanceType ~= "none" then where.instanceID = instanceID end
     end
-    if instanceType and instanceType ~= "none" then
-        return nil, foreverInstances[instanceID]
+    if not where.instanceID and C_Map and C_Map.GetBestMapForUnit then
+        where.mapID = C_Map.GetBestMapForUnit("player")
     end
-    return C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+    return where
 end
 
-local function InForeverZone(zone, mapID, instanceZone)
-    while mapID do
-        if foreverZones[zone][mapID] then return true end
-        local info = C_Map.GetMapInfo and C_Map.GetMapInfo(mapID)
+local function InKnownZone(key, where)
+    local instanceZones = where.instanceID and FOREVER_INSTANCES[where.instanceID]
+    if instanceZones then return instanceZones[key] == true end
+    local zones = FOREVER_ZONES[key]
+    local mapID, guard = where.mapID, 0
+    while zones and mapID and mapID ~= 0 and guard < 10 do
+        if zones[mapID] then return true end
+        local info = C_Map and C_Map.GetMapInfo and C_Map.GetMapInfo(mapID)
         mapID = info and info.parentMapID
-        if mapID == 0 then break end
+        guard = guard + 1
     end
-    return instanceZone == zone
+    return false
 end
 
-local function FindForeverCandidate(piece, reserved)
-    local itemID, slots, minLevel = piece[1], piece[2], piece[3]
-    if minLevel and UnitLevel("player") < minLevel then return end
-    for _, slot in ipairs(slots) do
-        if not reserved[slot] and GetInventoryItemID("player", slot) == itemID then
-            return { itemID = itemID, slot = slot, equipped = true }
+-- "Eastern Plaguelands" also matches "Eastern and Western Plaguelands".
+local function ZoneNameMatches(cond, zone)
+    if cond:find(zone, 1, true) then return true end
+    local words = {}
+    for word in zone:gmatch("%S+") do
+        if word ~= "the" then words[#words + 1] = word end
+    end
+    if #words < 2 then return false end
+    return cond:find(" " .. words[1] .. " ", 1, true) ~= nil and cond:find(" " .. words[#words] .. " ", 1, true) ~= nil
+end
+
+local function TooltipConditionActive(cond, where)
+    local c = NormalizeText(cond)
+    for group, members in pairs(AREA_GROUPS) do
+        if c:find(" " .. group .. " area", 1, true) then
+            if FOREVER_ZONES[group] and (where.mapID or where.instanceID) then return InKnownZone(group, where) end
+            for _, zone in ipairs(where.names) do
+                if members[zone] then return true end
+            end
+            return false
         end
     end
-    if ATS:GetItemCountSafe(itemID) == 0 then return end
-    local item = FindBagItemByID(itemID)
-    if item then
-        for _, slot in ipairs(slots) do
-            if not reserved[slot] then
-                item.slot = slot
-                return item
+    for _, zone in ipairs(where.names) do
+        if ZoneNameMatches(c, zone) then return true end
+    end
+    return false
+end
+
+-- bonus = { score, zone = known zone key, cond = tooltip condition text }
+local function BonusActive(bonus, where)
+    if bonus.zone then return InKnownZone(bonus.zone, where) end
+    if bonus.cond then return TooltipConditionActive(bonus.cond, where) end
+    return true
+end
+
+-- Returns score, zoneCondition for a lower-cased tooltip line that grants mount/movement speed.
+local function ParseSpeedLine(t)
+    if t:find("swim", 1, true) then return nil end
+    if t:find("^use:") or t:find("^chance on hit") then return nil end
+    local isSpeed = (t:find("%f[%a]mount") and t:find("speed", 1, true))
+        or t:find("movement speed", 1, true)
+        or t:find("riding skill", 1, true)
+        or t:find("mithril spurs", 1, true)
+    if not isSpeed then return nil end
+    local score = tonumber(t:match("(%d+)%%")) or 1
+    local cond = t:match("speed.-%f[%a]in (.-)%.?$")
+    return score, cond
+end
+
+local foreverInfoCache = {}
+
+local function GetForeverItemInfo(link)
+    local cached = foreverInfoCache[link]
+    if cached ~= nil then return cached or nil end
+
+    local equipLoc = GetItemEquipLocSafe(link)
+    local group = equipLoc and EQUIPLOC_GROUP[equipLoc]
+    local knownByID = FOREVER_KNOWN[GetItemIDFromLinkOrID(link) or 0]
+    if not group and knownByID then group = knownByID.group end -- item info not cached yet
+    if not group then
+        if equipLoc then foreverInfoCache[link] = false end
+        return nil
+    end
+
+    local itemID = GetItemIDFromLinkOrID(link)
+    local info = { itemID = itemID, group = group, directs = {} }
+    local known = itemID and FOREVER_KNOWN[itemID]
+    if known then
+        info.minLevel = known.minLevel
+        if known.set then
+            info.setName = known.set
+            info.set = { need = known.need, score = known.score, zone = known.zone }
+        else
+            info.directs[1] = { score = known.score, zone = known.zone }
+        end
+    else
+        local tip = GetMountSpeedScanTooltip()
+        tip:ClearLines()
+        if tip.SetHyperlink then tip:SetHyperlink(link) end
+        local lineCount = tip.NumLines and tip:NumLines() or 0
+        if lineCount < 2 then info.notLoaded = true end -- item data not loaded yet; rescan later
+        for i = 2, lineCount do
+            local fs = _G["ATS_MountSpeedScanTooltipTextLeft" .. i]
+            local text = fs and fs:GetText()
+            if text then
+                local setName = text:match("^(.-) %(%d+/%d+%)$")
+                if setName then
+                    info.setName = setName:lower()
+                else
+                    local t = text:lower()
+                    local score, cond = ParseSpeedLine(t)
+                    if score then
+                        local need = tonumber(t:match("^%((%d+)%) set:"))
+                        if need then
+                            if not info.set or score > info.set.score then
+                                info.set = { need = need, score = score, cond = cond }
+                            end
+                        else
+                            info.directs[#info.directs + 1] = { score = score, cond = cond }
+                        end
+                    end
+                end
+            end
+        end
+        if info.set and not info.setName then info.set = nil end
+    end
+
+    local enchantScore = FOREVER_ENCHANTS[GetEnchantIDFromLink(link) or 0]
+    if enchantScore then info.directs[#info.directs + 1] = { score = enchantScore } end
+
+    if #info.directs == 0 and not info.set then
+        if not info.notLoaded then foreverInfoCache[link] = false end
+        return nil
+    end
+    if not info.notLoaded then foreverInfoCache[link] = info end
+    return info
+end
+
+local function ActiveScore(info, where)
+    local best = 0
+    for _, bonus in ipairs(info.directs) do
+        if bonus.score > best and BonusActive(bonus, where) then best = bonus.score end
+    end
+    return best
+end
+
+-- Bag items must be soulbound (no bind prompt) and wearable (no red tooltip lines).
+local function BagItemUsable(bag, slot)
+    local tip = GetMountSpeedScanTooltip()
+    tip:ClearLines()
+    if not tip.SetBagItem then return true end -- cannot inspect; let the equip attempt decide
+    tip:SetBagItem(bag, slot)
+    local bindText = ITEM_BIND_ON_EQUIP or "Binds when equipped"
+    for i = 1, (tip:NumLines() or 0) do
+        for _, side in ipairs({ "Left", "Right" }) do
+            local fs = _G["ATS_MountSpeedScanTooltipText" .. side .. i]
+            local text = fs and fs:IsShown() and fs:GetText()
+            if text then
+                if text == bindText then return false end
+                local r, g, b = fs:GetTextColor()
+                if r and r > 0.95 and g < 0.2 and b < 0.2 then return false end
             end
         end
     end
+    return true
 end
 
-local function PlanForeverGroup(plan, group)
-    local reserved, selectedIDs, selected = {}, {}, {}
-    for slot in pairs(plan) do reserved[slot] = true end
-    -- Keep pieces that are already worn before choosing a slot for a bag item.
-    for _, equippedOnly in ipairs({ true, false }) do
-        for _, piece in ipairs(group) do
-            if #selected == group.count then break end
-            local item = not selectedIDs[piece[1]] and FindForeverCandidate(piece, reserved)
-            if item and not plan[item.slot] and (not equippedOnly or item.equipped) then
-                selectedIDs[piece[1]] = true
-                selected[#selected + 1] = item
-                reserved[item.slot] = true
-            end
+local function CollectForeverCandidates(db)
+    local list = {}
+    local weapons = db.mountSpeedWeaponsEnabled == true
+    local trinkets = db.mountSpeedTrinketsEnabled ~= false
+    local function add(link, bag, slot, invSlot)
+        local info = GetForeverItemInfo(link)
+        if not info then return end
+        if info.group == 16 and not weapons then return end
+        if info.group == 13 and not trinkets then return end
+        list[#list + 1] = { link = link, info = info, bag = bag, slot = slot, invSlot = invSlot }
+    end
+    for _, invSlot in ipairs(MOUNT_SPEED_RESTORE_SLOTS) do
+        local link = GetInventoryItemLink and GetInventoryItemLink("player", invSlot)
+        if link then add(link, nil, nil, invSlot) end
+    end
+    for bag = 0, (NUM_BAG_SLOTS or 4) do
+        for slot = 1, GetBagSlotCount(bag) do
+            local link = GetBagItemLink(bag, slot)
+            if link then add(link, bag, slot, nil) end
         end
     end
-    if not group.allowPartial and #selected < group.count then return end
-    for _, item in ipairs(selected) do plan[item.slot] = item end
+    return list
 end
 
-local function EquipForeverMountGear(db)
-    local mapID, instanceZone = GetForeverZoneContext()
-    local plan = {}
-    if db.mountSpeedTrinketsEnabled ~= false then
-        local trinkets = { count = 2, allowPartial = true, { 11122, MOUNT_SPEED_TRINKET_SLOTS } }
-        if InForeverZone("desert", mapID, instanceZone) then
-            trinkets[#trinkets + 1] = { 274648, MOUNT_SPEED_TRINKET_SLOTS, 42 }
-        end
-        PlanForeverGroup(plan, trinkets)
-    end
-    local twoHanded
-    for _, group in ipairs(foreverGear) do
-        if (not group.weapon or db.mountSpeedWeaponsEnabled) and InForeverZone(group.zone, mapID, instanceZone) then
-            PlanForeverGroup(plan, group)
-            if group.weapon and plan[16] then twoHanded = true end
+local function IsUsable(c)
+    if c.usable == nil then
+        if c.info.minLevel and (UnitLevel("player") or 0) < c.info.minLevel then
+            c.usable = false
+        else
+            c.usable = c.invSlot ~= nil or BagItemUsable(c.bag, c.slot)
         end
     end
+    return c.usable
+end
 
-    for slot, config in pairs(MOUNT_SPEED_ARMOR) do
-        if not plan[slot] then
-            local currentLink = GetInventoryItemLink("player", slot)
-            if LinkHasEnchant(currentLink, config.enchantIDs) then
-                plan[slot] = { equipped = true }
-            else
-                local item = FindMountSpeedArmor(config)
-                if item then plan[slot] = item end
+local function PickSlot(c, assigned)
+    local slots = GroupSlots(c.info.group)
+    if c.invSlot and not assigned[c.invSlot] then
+        for _, s in ipairs(slots) do
+            if s == c.invSlot then return s end
+        end
+    end
+    for _, s in ipairs(slots) do
+        if not assigned[s] then return s end
+    end
+end
+
+local function SelectForeverGear(cands, where)
+    local assigned, used, usedIDs = {}, {}, {}
+
+    -- 2-piece (or more) zone sets first: only worth wearing when enough pieces fit.
+    local sets, setOrder = {}, {}
+    for _, c in ipairs(cands) do
+        local s = c.info.set
+        if s and BonusActive(s, where) and IsUsable(c) then
+            local entry = sets[c.info.setName]
+            if not entry then
+                entry = { need = s.need, score = s.score, pieces = {} }
+                sets[c.info.setName] = entry
+                setOrder[#setOrder + 1] = entry
+            end
+            table.insert(entry.pieces, c)
+        end
+    end
+    table.sort(setOrder, function(a, b) return a.score > b.score end)
+    for _, entry in ipairs(setOrder) do
+        table.sort(entry.pieces, function(a, b) return (a.invSlot and 1 or 0) > (b.invSlot and 1 or 0) end)
+        local taken, ids = {}, {}
+        for _, c in ipairs(entry.pieces) do
+            if #taken >= entry.need then break end
+            if not used[c] and not ids[c.info.itemID] and not usedIDs[c.info.itemID] then
+                local slot = PickSlot(c, assigned)
+                if slot then
+                    assigned[slot] = c
+                    taken[#taken + 1] = slot
+                    ids[c.info.itemID] = true
+                end
             end
         end
+        if #taken >= entry.need then
+            for _, slot in ipairs(taken) do
+                used[assigned[slot]] = true
+                usedIDs[assigned[slot].info.itemID] = true
+            end
+        else
+            for _, slot in ipairs(taken) do assigned[slot] = nil end
+        end
     end
 
+    -- Individual items, best active bonus first; already-equipped items win ties.
+    local singles = {}
+    for _, c in ipairs(cands) do
+        if not used[c] then
+            c.score = ActiveScore(c.info, where)
+            if c.score > 0 then singles[#singles + 1] = c end
+        end
+    end
+    table.sort(singles, function(a, b)
+        if a.score ~= b.score then return a.score > b.score end
+        return (a.invSlot and 1 or 0) > (b.invSlot and 1 or 0)
+    end)
+    local free, chosen = {}, {}
+    for _, c in ipairs(singles) do
+        local group = c.info.group
+        if free[group] == nil then
+            free[group] = 0
+            for _, s in ipairs(GroupSlots(group)) do
+                if not assigned[s] then free[group] = free[group] + 1 end
+            end
+        end
+        if free[group] > 0 and not usedIDs[c.info.itemID] and IsUsable(c) then
+            free[group] = free[group] - 1
+            usedIDs[c.info.itemID] = true
+            c.zoneBound = ActiveScore({ directs = (function()
+                local list = {}
+                for _, b in ipairs(c.info.directs) do if not b.zone and not b.cond then list[#list + 1] = b end end
+                return list
+            end)() }, where) == 0
+            chosen[#chosen + 1] = c
+        end
+    end
+    table.sort(chosen, function(a, b)
+        local ar = a.invSlot and 0 or (a.zoneBound and 2 or 1)
+        local br = b.invSlot and 0 or (b.zoneBound and 2 or 1)
+        return ar < br
+    end)
+    for _, c in ipairs(chosen) do
+        local slot = PickSlot(c, assigned)
+        if slot then assigned[slot] = c end
+    end
+    return assigned
+end
+
+local foreverAttempts = {}
+local function CanAttemptEquip(itemID, slot)
+    local key = slot .. ":" .. tostring(itemID)
+    local entry = foreverAttempts[key]
+    local now = GetTime()
+    if entry and (now - entry.time < 3 or entry.count >= 3) then return false end
+    foreverAttempts[key] = { time = now, count = (entry and entry.count or 0) + 1 }
+    return true
+end
+
+local function GallopingActive()
+    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        if C_UnitAuras.GetPlayerAuraBySpellID(GALLOPING_SPELL_ID) then return true end
+    end
+    local name = ATS.GetItemSpellSafe and ATS:GetItemSpellSafe(GALLOPING_ITEM_ID)
+    if not name then return false end
+    for i = 1, 40 do
+        local buffName
+        if C_UnitAuras and C_UnitAuras.GetBuffDataByIndex then
+            local data = C_UnitAuras.GetBuffDataByIndex("player", i)
+            buffName = data and data.name
+        elseif UnitBuff then
+            buffName = UnitBuff("player", i)
+        end
+        if not buffName then return false end
+        if buffName == name then return true end
+    end
+    return false
+end
+
+function ATS:GetGiftOfGallopingStatus()
+    if not IS_FOREVER then return end
+    if GallopingActive() then return "Active (+10% mounted speed)" end
+    if self:GetItemCountSafe(GALLOPING_ITEM_ID) > 0 then return "In bags (use manually)" end
+end
+
+local gallopingReminded = false
+local function RemindGiftOfGalloping()
+    if gallopingReminded then return end
+    if (UnitLevel("player") or 0) < 60 then return end
+    if ATS:GetItemCountSafe(GALLOPING_ITEM_ID) == 0 or GallopingActive() then return end
+    gallopingReminded = true
+    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        DEFAULT_CHAT_FRAME:AddMessage("|cffFFD100AutoTrinketSwitcher:|r Gift of Galloping is in your bags but not active (+10% mounted speed).")
+    end
+end
+
+local function EquipForeverSpeedGear(db)
+    RemindGiftOfGalloping()
+
+    local wanted = SelectForeverGear(CollectForeverCandidates(db), GetWhere())
     local changed = false
+    local restoreSlots = {}
     for _, slot in ipairs(MOUNT_SPEED_RESTORE_SLOTS) do
-        local item = plan[slot]
-        local previous = db.mountSpeedPrevious
-        if item and not item.equipped then
-            SaveMountSpeedPrevious(db, slot)
-            if slot == 16 and twoHanded then SaveMountSpeedPrevious(db, 17) end
-            db.mountSpeedActive = true
-            EquipItem(item.link or item.itemID, slot)
-            MarkMountSpeedEquip(slot)
-            changed = true
-        elseif not item and previous and previous[slot] ~= nil and not (slot == 17 and (twoHanded or previous[16] ~= nil)) then
-            RestoreMountSpeedSlots(db, { slot })
-            if previous[slot] == nil then changed = true end
+        local c = wanted[slot]
+        local current = GetInventoryItemLink("player", slot)
+        local currentID = current and GetItemIDFromLinkOrID(current)
+        if currentID then foreverAttempts[slot .. ":" .. currentID] = nil end -- that equip worked
+        if c then
+            if current == c.link or (c.invSlot == slot and currentID == c.info.itemID) then
+                -- already worn
+            elseif CanAttemptEquip(c.info.itemID, slot) then
+                SaveMountSpeedPrevious(db, slot)
+                if slot == 16 then SaveMountSpeedPrevious(db, 17) end -- any main-hand swap may move the off hand
+                db.mountSpeedActive = true
+                EquipItem(c.link, slot)
+                MarkMountSpeedEquip(slot)
+                changed = true
+            end
+        elseif db.mountSpeedPrevious and db.mountSpeedPrevious[slot] ~= nil and not (slot == 17 and wanted[16]) then
+            -- Left the zone (or option turned off): put the normal item back.
+            restoreSlots[#restoreSlots + 1] = slot
         end
+    end
+    if #restoreSlots > 0 then
+        RestoreMountSpeedSlots(db, restoreSlots)
+        changed = true
     end
     return changed
 end
 
-function ATS:GetGiftOfGallopingStatus()
-    if client ~= "FOREVER" then return end
-    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID and C_UnitAuras.GetPlayerAuraBySpellID(GALLOPING_SPELL_ID) then
-        return "Active (+10% mounted speed)"
+local function ScanForeverGear(includeWeapons)
+    local db = AutoTrinketSwitcherCharDB or {}
+    local savedTrinkets, savedWeapons = db.mountSpeedTrinketsEnabled, db.mountSpeedWeaponsEnabled
+    db.mountSpeedTrinketsEnabled = true
+    db.mountSpeedWeaponsEnabled = true
+    local list = CollectForeverCandidates(db)
+    db.mountSpeedTrinketsEnabled, db.mountSpeedWeaponsEnabled = savedTrinkets, savedWeapons
+    return list
+end
+
+local function ForeverHasSpeedGear()
+    return #ScanForeverGear() > 0
+end
+
+function ATS:HasForeverSpeedWeapons()
+    if not IS_FOREVER then return false end
+    for _, c in ipairs(ScanForeverGear()) do
+        if c.info.group == 16 then return true end
     end
-    if self:GetItemCountSafe(GALLOPING_ITEM_ID) > 0 then
-        return "In bags (use manually)"
+    return false
+end
+
+function ATS:OnMountSpeedWeaponsOptionChanged(enabled)
+    Ensure()
+    local db = AutoTrinketSwitcherCharDB
+    db.mountSpeedWeaponsEnabled = not not enabled
+    if not CanSwap() or (InCombatLockdown and InCombatLockdown()) then return end
+    if enabled then
+        if self.isMounted and db.useMountSpeedManager then self:EquipMountSpeedGear() end
+    elseif db.mountSpeedPrevious then
+        RestoreMountSpeedSlots(db, { 16, 17 })
     end
+    if self.UpdateButtons then self:UpdateButtons() end
 end
 
 function ATS:EquipMountSpeedGear()
@@ -422,7 +787,7 @@ function ATS:EquipMountSpeedGear()
     if InCombatLockdown and InCombatLockdown() then return false end
 
     local db = AutoTrinketSwitcherCharDB
-    if client == "FOREVER" then return EquipForeverMountGear(db) end
+    if IS_FOREVER then return EquipForeverSpeedGear(db) end
     local changed = false
 
     if db.mountSpeedTrinketsEnabled ~= false then
@@ -536,20 +901,11 @@ end
 -- Called when opening options, not on every frame.
 function ATS:HasRelevantMountGear()
     if AutoTrinketSwitcherCharDB and AutoTrinketSwitcherCharDB.mountSpeedPrevious then return true end
+    if IS_FOREVER then return ForeverHasSpeedGear() end
     for _, item in ipairs(MOUNT_SPEED_TRINKETS) do
         if self:GetItemCountSafe(item.itemID) > 0 then return true end
         for _, slot in ipairs(MOUNT_SPEED_TRINKET_SLOTS) do
             if GetInventoryItemID("player", slot) == item.itemID then return true end
-        end
-    end
-    if client == "FOREVER" then
-        for _, group in ipairs(foreverGear) do
-            for _, piece in ipairs(group) do
-                if self:GetItemCountSafe(piece[1]) > 0 then return true end
-                for _, slot in ipairs(piece[2]) do
-                    if GetInventoryItemID("player", slot) == piece[1] then return true end
-                end
-            end
         end
     end
     for slot, config in pairs(MOUNT_SPEED_ARMOR) do
