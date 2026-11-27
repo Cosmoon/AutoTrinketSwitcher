@@ -350,6 +350,7 @@ EnsureDB = function()
     db.colors.macroReadyGlow14 = db.colors.macroReadyGlow14 or { r = 0.2, g = 0.6, b = 1 }
     db.useMountSpeedManager = db.useMountSpeedManager ~= false
     db.mountSpeedTrinketsEnabled = db.mountSpeedTrinketsEnabled ~= false
+    db.mountSpeedWeaponsEnabled = db.mountSpeedWeaponsEnabled == true -- Forever two-handers, off by default
     if ATS.NormalizeSpecialTrinketSettings then ATS:NormalizeSpecialTrinketSettings(db) end
 end
 
